@@ -66,7 +66,6 @@ export default function LoginForm({ onLogin, erro }) {
             maskChar=""
             type="tel"
             inputMode="numeric"
-            pattern="\d*"
             placeholder="000.000.000-00"
             value={cpf}
             onChange={e => setCpf(e.target.value)}
