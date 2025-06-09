@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Swiper, SwiperSlide } from "swiper/react";
-import SwiperCore from 'swiper';
 import "swiper/css";
 import "swiper/css/pagination";
 import { Pagination } from "swiper/modules";
@@ -25,20 +24,7 @@ function beep(frequency = 600, duration = 120) {
 }
 
 export default function CarrosselFrequencia({ funcionario, onLogout }) {
-  // Protege contra objeto inválido:
-  if (!funcionario || !funcionario.qrcode_id) {
-    return (
-      <div style={{
-        textAlign: 'center',
-        marginTop: 100,
-        color: '#d32f2f'
-      }}>
-        Erro ao carregar dados do funcionário.<br />
-        Tente refazer o login.
-      </div>
-    );
-  }
-
+  // Hooks sempre no topo!
   const [presencaConfirmada, setPresencaConfirmada] = useState(false);
   const [swiperReady, setSwiperReady] = useState(false);
   const swiperRef = useRef(null);
@@ -46,7 +32,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
 
   // Polling para confirmação da entrada
   useEffect(() => {
-    if (presencaConfirmada) return;
+    if (!funcionario || !funcionario.cpf || presencaConfirmada) return;
     const interval = setInterval(async () => {
       try {
         const res = await fetch(
@@ -59,9 +45,9 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
       } catch (err) { }
     }, 2000);
     return () => clearInterval(interval);
-  }, [funcionario.cpf, presencaConfirmada]);
+  }, [funcionario, presencaConfirmada]);
 
-  // Avança AUTOMATICAMENTE após confirmação
+  // Avança automaticamente após confirmação
   useEffect(() => {
     if (
       presencaConfirmada &&
@@ -75,7 +61,6 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
       beep();
       beepedRef.current = true;
       setTimeout(() => {
-        // Avança para próxima tela
         swiperRef.current.slideNext();
       }, 900);
     }
@@ -88,7 +73,21 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
     }
   }
 
-  // Preencher toda a área segura
+  // Retorno condicional após os hooks
+  if (!funcionario || !funcionario.qrcode_id) {
+    return (
+      <div style={{
+        textAlign: 'center',
+        marginTop: 100,
+        color: '#d32f2f'
+      }}>
+        Erro ao carregar dados do funcionário.<br />
+        Tente refazer o login.
+      </div>
+    );
+  }
+
+  // Estilos de responsividade
   const mainStyle = {
     minHeight: "100dvh",
     width: "100vw",
