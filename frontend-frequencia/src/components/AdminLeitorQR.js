@@ -14,7 +14,7 @@ export default function AdminLeitorQR() {
     setMensagem("Lendo QR Code...");
     const [qrcode_id, tipoLido] = result.split("-");
     try {
-      const res = await fetch("http://localhost:4000/api/frequencia", {
+      const res = await fetch("https://eventos-wi35.onrender.com/api/frequencia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -15,7 +15,7 @@ function App() {
   async function handleLogin({ cpf }) {
     setErro("");
     try {
-      const response = await fetch("http://localhost:4000/api/funcionario-cpf", {
+      const response = await fetch("https://eventos-wi35.onrender.com/api/funcionario-cpf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cpf }),

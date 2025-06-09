@@ -7,7 +7,7 @@ export default function TelaQRCodeEntrada({ funcionario }) {
   // Faz polling para saber se a presença foi registrada
   useEffect(() => {
     const interval = setInterval(async () => {
-      const res = await fetch(`http://localhost:4000/api/checar-frequencia?cpf=${funcionario.cpf}&tipo=entrada`);
+      const res = await fetch(`https://eventos-wi35.onrender.com/api/checar-frequencia?cpf=${funcionario.cpf}&tipo=entrada`);
       const data = await res.json();
       if (data.confirmada) {
         setPresencaConfirmada(true);
