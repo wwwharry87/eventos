@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import "swiper/css";
@@ -26,11 +26,13 @@ const corSecundaria = "#FFD600";
 
 export default function CarrosselFrequencia({ funcionario, onLogout }) {
   const [presencaConfirmada, setPresencaConfirmada] = useState(false);
-  const [swiperRef, setSwiperRef] = useState(null);
+  const [swiperReady, setSwiperReady] = useState(false);
+  const swiperRef = useRef(null);
+  const beepedRef = useRef(false);
 
   // Polling para confirmação da entrada
   useEffect(() => {
-    if (presencaConfirmada || !swiperRef) return;
+    if (presencaConfirmada) return;
     const interval = setInterval(async () => {
       const res = await fetch(
         `https://eventos-wi35.onrender.com/api/checar-frequencia?cpf=${funcionario.cpf}&tipo=entrada`
@@ -38,17 +40,29 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
       const data = await res.json();
       if (data.confirmada) {
         setPresencaConfirmada(true);
-        // Efeito de vibração e beep
-        if (window.navigator.vibrate) {
-          window.navigator.vibrate(180);
-        }
-        beep();
-        setTimeout(() => swiperRef.slideNext(), 800); // animação natural
-        clearInterval(interval);
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [funcionario.cpf, presencaConfirmada, swiperRef]);
+  }, [funcionario.cpf, presencaConfirmada]);
+
+  // Efeito: ao confirmar presença, faz beep/vibra/navega
+  useEffect(() => {
+    if (
+      presencaConfirmada &&
+      swiperReady &&
+      swiperRef.current &&
+      !beepedRef.current
+    ) {
+      if (window.navigator.vibrate) {
+        window.navigator.vibrate(180);
+      }
+      beep();
+      beepedRef.current = true;
+      setTimeout(() => {
+        swiperRef.current.slideNext();
+      }, 800);
+    }
+  }, [presencaConfirmada, swiperReady]);
 
   return (
     <div
@@ -56,7 +70,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
         minHeight: "100vh",
         background: "#f5f8fa",
         display: "flex",
-        flexDirection: "column"
+        flexDirection: "column",
       }}
     >
       <header
@@ -68,6 +82,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
           borderBottomLeftRadius: 18,
           borderBottomRightRadius: 18,
           boxShadow: "0 2px 8px #0002",
+          position: "relative",
         }}
       >
         <h2
@@ -91,7 +106,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
             color: "#fff",
             fontSize: 24,
             cursor: "pointer",
-            zIndex: 2
+            zIndex: 2,
           }}
           title="Sair"
         >
@@ -105,7 +120,10 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
         <Swiper
           modules={[Pagination]}
           pagination={{ clickable: true }}
-          onSwiper={setSwiperRef}
+          onSwiper={(swiper) => {
+            swiperRef.current = swiper;
+            setSwiperReady(true);
+          }}
           allowTouchMove={presencaConfirmada}
           spaceBetween={8}
           slidesPerView={1}
@@ -113,7 +131,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
             flex: 1,
             minHeight: "calc(100vh - 110px)",
             paddingTop: "2vh",
-            paddingBottom: "2vh"
+            paddingBottom: "2vh",
           }}
         >
           {/* Tela do QR de entrada */}
@@ -130,7 +148,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
-                alignItems: "center"
+                alignItems: "center",
               }}
             >
               <h3 style={{ color: corPrimaria, marginBottom: 10 }}>
@@ -173,7 +191,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
-                alignItems: "center"
+                alignItems: "center",
               }}
             >
               <h3 style={{ color: corPrimaria, marginBottom: 8 }}>
@@ -198,7 +216,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
                     background: "#fffbe9",
                     padding: 8,
                     borderRadius: 8,
-                    margin: "18px 0"
+                    margin: "18px 0",
                   }}
                 >
                   🎂 Parabéns, hoje é seu aniversário!
@@ -210,7 +228,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
                     color: "#4e5d6c",
                     fontWeight: 600,
                     fontSize: 17,
-                    marginBottom: 8
+                    marginBottom: 8,
                   }}
                 >
                   ➤ Regras rápidas:
@@ -242,7 +260,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
-                alignItems: "center"
+                alignItems: "center",
               }}
             >
               <h3 style={{ color: corPrimaria, marginBottom: 12 }}>
