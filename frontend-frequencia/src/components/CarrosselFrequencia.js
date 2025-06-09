@@ -64,15 +64,24 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
     }
   }, [presencaConfirmada, swiperReady]);
 
+  // Estilo para cobrir toda a área segura da tela
+  const mainStyle = {
+    minHeight: "100dvh",
+    width: "100vw",
+    background: "#f5f8fa",
+    display: "flex",
+    flexDirection: "column",
+    paddingTop: "env(safe-area-inset-top)",
+    paddingBottom: "env(safe-area-inset-bottom)",
+    paddingLeft: "env(safe-area-inset-left)",
+    paddingRight: "env(safe-area-inset-right)",
+    boxSizing: "border-box",
+    overflow: "hidden",
+    position: "relative"
+  };
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f5f8fa",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    <div style={mainStyle}>
       <header
         style={{
           background: corPrimaria,
@@ -89,7 +98,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
           style={{
             margin: 0,
             fontWeight: 700,
-            fontSize: "clamp(20px,4vw,28px)",
+            fontSize: "clamp(18px,4vw,28px)",
             letterSpacing: 0.5,
           }}
         >
@@ -129,7 +138,8 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
           slidesPerView={1}
           style={{
             flex: 1,
-            minHeight: "calc(100vh - 110px)",
+            height: "100%",
+            minHeight: 0, // important for flexbox children
             paddingTop: "2vh",
             paddingBottom: "2vh",
           }}
@@ -149,6 +159,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
                 flexDirection: "column",
                 justifyContent: "center",
                 alignItems: "center",
+                height: "100%",
               }}
             >
               <h3 style={{ color: corPrimaria, marginBottom: 10 }}>
@@ -192,6 +203,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
                 flexDirection: "column",
                 justifyContent: "center",
                 alignItems: "center",
+                height: "100%",
               }}
             >
               <h3 style={{ color: corPrimaria, marginBottom: 8 }}>
@@ -261,6 +273,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
                 flexDirection: "column",
                 justifyContent: "center",
                 alignItems: "center",
+                height: "100%",
               }}
             >
               <h3 style={{ color: corPrimaria, marginBottom: 12 }}>
