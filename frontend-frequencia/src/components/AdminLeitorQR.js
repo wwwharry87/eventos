@@ -1,11 +1,9 @@
-// src/components/AdminLeitorQR.js
 import React, { useState } from "react";
 import { useZxing } from "react-zxing";
 
 export default function AdminLeitorQR() {
   const [mensagem, setMensagem] = useState("");
   const [ultimoQR, setUltimoQR] = useState("");
-  const [tipo, setTipo] = useState("entrada");
 
   const onDecode = async (result) => {
     if (result === ultimoQR) return;
@@ -19,7 +17,7 @@ export default function AdminLeitorQR() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           qrcode_id,
-          tipo: tipoLido || tipo,
+          tipo: tipoLido || "entrada",
         }),
       });
       const resp = await res.json();
