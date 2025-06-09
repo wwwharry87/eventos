@@ -1,60 +1,62 @@
 import React, { useState } from "react";
-import LoginForm from "././components/LoginForm";
-import CarrosselFrequencia from "././components/CarrosselFrequencia";
-import AdminLogin from "././components/AdminLogin";
-import AdminLeitorQR from "././components/AdminLeitorQR";
+import LoginForm from "./components/LoginForm";
+import CarrosselFrequencia from "./components/CarrosselFrequencia";
+import AdminLogin from "./components/AdminLogin";
+import AdminLeitorQR from "./components/AdminLeitorQR";
 
-function App() {
+export default function App() {
+  // Estados principais
   const [pagina, setPagina] = useState("login");
   const [funcionario, setFuncionario] = useState(null);
-  const [admin, setAdmin] = useState(false);
 
-  // LOGIN FUNCIONÁRIO
-  const handleLogin = (dadosFuncionario) => {
+  // Login de funcionário comum
+  const handleFuncionarioLogin = (dadosFuncionario) => {
     setFuncionario(dadosFuncionario);
     setPagina("carrossel");
   };
 
-  // LOGOUT
+  // Logout geral
   const handleLogout = () => {
     setFuncionario(null);
-    setAdmin(false);
     setPagina("login");
   };
 
-  // LOGIN ADMIN
+  // Login admin
   const handleAdminLogin = () => {
-    setAdmin(true);
     setPagina("admin");
   };
 
-  // LOGOUT ADMIN
+  // Logout admin
   const handleAdminLogout = () => {
-    setAdmin(false);
     setPagina("login");
   };
 
-  // Renderização condicional
-  if (pagina === "login")
-    return (
-      <LoginForm
-        onLogin={handleLogin}
-        onAdminClick={() => setPagina("admin-login")}
-      />
-    );
-
-  if (pagina === "carrossel")
-    return (
-      <CarrosselFrequencia funcionario={funcionario} onLogout={handleLogout} />
-    );
-
-  if (pagina === "admin-login")
-    return <AdminLogin onLogin={handleAdminLogin} onVoltar={() => setPagina("login")} />;
-
-  if (pagina === "admin")
-    return <AdminLeitorQR onLogout={handleAdminLogout} />;
-
-  return <div>Algo deu errado. Tente novamente.</div>;
+  // Renderização condicional por página
+  switch (pagina) {
+    case "login":
+      return (
+        <LoginForm
+          onLogin={handleFuncionarioLogin}
+          onAdminClick={() => setPagina("admin-login")}
+        />
+      );
+    case "carrossel":
+      return (
+        <CarrosselFrequencia
+          funcionario={funcionario}
+          onLogout={handleLogout}
+        />
+      );
+    case "admin-login":
+      return (
+        <AdminLogin
+          onLogin={handleAdminLogin}
+          onVoltar={() => setPagina("login")}
+        />
+      );
+    case "admin":
+      return <AdminLeitorQR onLogout={handleAdminLogout} />;
+    default:
+      return <div>Algo deu errado. Tente novamente.</div>;
+  }
 }
-
-export default App;
