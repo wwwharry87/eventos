@@ -45,7 +45,7 @@ app.post('/api/funcionario-cpf', async (req, res) => {
       qrcode_id: funcionario.qrcode_id,
       aniversariante,
       data_nascimento: funcionario.data_nascimento,
-      cpf: funcionario.cpf
+      cpf: funcionario.cpf  // <-- CPF SEMPRE enviado
     });
   } catch (err) {
     res.status(500).json({ mensagem: "Erro interno do servidor." });
@@ -108,10 +108,22 @@ app.post('/api/frequencia', async (req, res) => {
       });
     }
 
+    // Horário do Brasil (America/Belem)
+    const dataHoraBrasil = new Date().toLocaleString("pt-BR", { 
+      timeZone: "America/Belem" 
+    });
+    // Converter para formato compatível com Postgres (YYYY-MM-DD HH:mm:ss)
+    function formatarDataParaPostgres(dataBR) {
+      const [date, time] = dataBR.split(", ");
+      const [dia, mes, ano] = date.split("/");
+      return `${ano}-${mes}-${dia} ${time}`;
+    }
+    const dataHoraFormatada = formatarDataParaPostgres(dataHoraBrasil);
+
     // Salva registro se não existe ainda
     const registroResult = await pool.query(
-      'INSERT INTO frequencias (funcionario_id, tipo) VALUES ($1, $2) RETURNING *',
-      [funcionario.id, tipo]
+      'INSERT INTO frequencias (funcionario_id, tipo, data_hora) VALUES ($1, $2, $3) RETURNING *',
+      [funcionario.id, tipo, dataHoraFormatada]
     );
 
     res.json({
