@@ -8,7 +8,7 @@ import { Pagination } from "swiper/modules";
 const corPrimaria = "#0479B3";
 const corSecundaria = "#FFD600";
 
-function beep(frequency = 600, duration = 120) {
+function beep(frequency = 700, duration = 140) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = ctx.createOscillator();
@@ -24,13 +24,13 @@ function beep(frequency = 600, duration = 120) {
 }
 
 export default function CarrosselFrequencia({ funcionario, onLogout }) {
-  // Hooks sempre no topo!
+  // HOOKS sempre no topo!
   const [presencaConfirmada, setPresencaConfirmada] = useState(false);
   const [swiperReady, setSwiperReady] = useState(false);
   const swiperRef = useRef(null);
   const beepedRef = useRef(false);
 
-  // Polling para confirmação da entrada
+  // Checa confirmação da frequência
   useEffect(() => {
     if (!funcionario || !funcionario.cpf || presencaConfirmada) return;
     const interval = setInterval(async () => {
@@ -42,12 +42,12 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
         if (data.confirmada) {
           setPresencaConfirmada(true);
         }
-      } catch (err) { }
+      } catch (err) {}
     }, 2000);
     return () => clearInterval(interval);
   }, [funcionario, presencaConfirmada]);
 
-  // Avança automaticamente após confirmação
+  // Avança após confirmação
   useEffect(() => {
     if (
       presencaConfirmada &&
@@ -55,9 +55,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
       swiperRef.current &&
       !beepedRef.current
     ) {
-      if (window.navigator.vibrate) {
-        window.navigator.vibrate(180);
-      }
+      if (window.navigator.vibrate) window.navigator.vibrate(180);
       beep();
       beepedRef.current = true;
       setTimeout(() => {
@@ -66,28 +64,29 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
     }
   }, [presencaConfirmada, swiperReady]);
 
-  // Bloquear voltar para QRCode entrada
+  // Bloqueia voltar para tela do QRCode de entrada
   function bloquearVoltar(swiper) {
     if (swiper.activeIndex === 0 && presencaConfirmada) {
       swiper.slideTo(1, 0);
     }
   }
 
-  // Retorno condicional após os hooks
   if (!funcionario || !funcionario.qrcode_id) {
     return (
-      <div style={{
-        textAlign: 'center',
-        marginTop: 100,
-        color: '#d32f2f'
-      }}>
+      <div
+        style={{
+          textAlign: "center",
+          marginTop: 100,
+          color: "#d32f2f",
+        }}
+      >
         Erro ao carregar dados do funcionário.<br />
         Tente refazer o login.
       </div>
     );
   }
 
-  // Estilos de responsividade
+  // Estilos responsivos
   const mainStyle = {
     minHeight: "100dvh",
     width: "100vw",
@@ -100,7 +99,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
     paddingRight: "env(safe-area-inset-right)",
     boxSizing: "border-box",
     overflow: "hidden",
-    position: "relative"
+    position: "relative",
   };
 
   return (
@@ -125,7 +124,8 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
             letterSpacing: 0.5,
           }}
         >
-          4ª Edição do Encontro<br />do Educacenso de Marabá-PA
+          4ª Edição do Encontro<br />
+          do Educacenso de Marabá-PA
         </h2>
         <button
           onClick={onLogout}
@@ -156,7 +156,7 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
           setSwiperReady(true);
         }}
         onSlideChange={bloquearVoltar}
-        allowTouchMove={presencaConfirmada} // swipe só após confirmar!
+        allowTouchMove={presencaConfirmada} // swipe só depois da confirmação
         initialSlide={0}
         style={{
           flex: 1,
@@ -196,34 +196,53 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
         {/* INFO */}
         <SwiperSlide>
           <div className="card-frequencia" style={cardStyle}>
-            <h3 style={{ color: corPrimaria, marginBottom: 8 }}>Presença confirmada!</h3>
+            <h3 style={{ color: corPrimaria, marginBottom: 8 }}>
+              Presença confirmada!
+            </h3>
             <p style={{ fontWeight: 500, marginBottom: 12 }}>
               Olá, <b>{funcionario.nome}</b>! <br />
               Aproveite a <b>4ª Edição do Encontro do Educacenso de Marabá-PA</b>.
               <br />
-              <span role="img" aria-label="confetti" style={{ fontSize: 32, marginTop: 10 }}>🎉</span>
+              <span
+                role="img"
+                aria-label="confetti"
+                style={{ fontSize: 32, marginTop: 10 }}
+              >
+                🎉
+              </span>
             </p>
             {funcionario.aniversariante && (
-              <p style={{
-                color: "#ff9800",
-                fontWeight: "bold",
-                background: "#fffbe9",
-                padding: 8,
-                borderRadius: 8,
-                margin: "18px 0",
-              }}>
+              <p
+                style={{
+                  color: "#ff9800",
+                  fontWeight: "bold",
+                  background: "#fffbe9",
+                  padding: 8,
+                  borderRadius: 8,
+                  margin: "18px 0",
+                }}
+              >
                 🎂 Parabéns, hoje é seu aniversário!
               </p>
             )}
             <div style={{ textAlign: "left", margin: "18px 0 0 0" }}>
-              <div style={{ color: "#4e5d6c", fontWeight: 600, fontSize: 17, marginBottom: 8 }}>
+              <div
+                style={{
+                  color: "#4e5d6c",
+                  fontWeight: 600,
+                  fontSize: 17,
+                  marginBottom: 8,
+                }}
+              >
                 ➤ Regras rápidas:
               </div>
               <ul style={{ lineHeight: 1.5, fontSize: 15, paddingLeft: 16 }}>
                 <li>Traga documento com foto.</li>
                 <li>Respeite horários de entrada e saída.</li>
                 <li>Use este app sempre que solicitado.</li>
-                <li>Em caso de dúvida, procure a equipe organizadora.</li>
+                <li>
+                  Em caso de dúvida, procure a equipe organizadora.
+                </li>
               </ul>
             </div>
             <div style={{ marginTop: 32, color: "#999", fontSize: 15 }}>
@@ -235,7 +254,9 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
         {/* QR SAÍDA */}
         <SwiperSlide>
           <div className="card-frequencia" style={cardStyle}>
-            <h3 style={{ color: corPrimaria, marginBottom: 12 }}>Saída do Evento</h3>
+            <h3 style={{ color: corPrimaria, marginBottom: 12 }}>
+              Saída do Evento
+            </h3>
             <p style={{ fontWeight: 500 }}>
               Ao FINALIZAR, mostre este QR Code para registrar sua SAÍDA:
             </p>

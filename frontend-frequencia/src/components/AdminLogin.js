@@ -3,103 +3,124 @@ import React, { useState } from "react";
 const corPrimaria = "#0479B3";
 
 export default function AdminLogin({ onLogin, onVoltar }) {
-  const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
+  const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(false);
 
-  function handleSubmit(e) {
+  // Defina a senha que quiser!
+  const SENHA_ADMIN = "educacenso2024";
+
+  const handleSubmit = (e) => {
     e.preventDefault();
-    onLogin(usuario, senha);
-  }
+    setErro("");
+    setCarregando(true);
+
+    setTimeout(() => {
+      if (senha === SENHA_ADMIN) {
+        onLogin();
+      } else {
+        setErro("Senha inválida.");
+      }
+      setCarregando(false);
+    }, 500);
+  };
 
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background: "#f5f8fa",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        flexDirection: "column"
+        padding: "env(safe-area-inset-top) 2vw env(safe-area-inset-bottom) 2vw",
       }}
     >
-      <div
+      <form
+        onSubmit={handleSubmit}
         style={{
           background: "#fff",
           borderRadius: 18,
-          boxShadow: "0 2px 16px #0001",
-          padding: 36,
-          minWidth: 300,
+          boxShadow: "0 2px 18px #0002",
+          padding: "7vw 7vw 5vw 7vw",
           maxWidth: 350,
-          textAlign: "center"
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
         }}
+        autoComplete="off"
       >
-        <h2 style={{ color: corPrimaria, fontWeight: 700, marginBottom: 12 }}>
-          Acesso do Administrador
+        <h2 style={{
+          fontSize: "clamp(16px,4vw,24px)",
+          color: corPrimaria,
+          marginBottom: 20,
+          fontWeight: 700,
+        }}>
+          Área do Administrador
         </h2>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="Usuário"
-            value={usuario}
-            onChange={e => setUsuario(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "12px 10px",
-              fontSize: 16,
-              borderRadius: 8,
-              border: "1px solid #e0e0e0",
-              marginBottom: 12
-            }}
-          />
-          <input
-            type="password"
-            placeholder="Senha"
-            value={senha}
-            onChange={e => setSenha(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "12px 10px",
-              fontSize: 16,
-              borderRadius: 8,
-              border: "1px solid #e0e0e0",
-              marginBottom: 18
-            }}
-          />
-          <button
-            type="submit"
-            style={{
-              background: corPrimaria,
-              color: "#fff",
-              fontWeight: 600,
-              fontSize: 17,
-              border: "none",
-              borderRadius: 8,
-              padding: "11px 0",
-              width: "100%",
-              boxShadow: "0 1px 5px #0001",
-              cursor: "pointer"
-            }}
-          >
-            Entrar
-          </button>
-        </form>
+        <label style={{ width: "100%", marginBottom: 8, fontWeight: 500 }}>
+          Senha:
+        </label>
+        <input
+          type="password"
+          value={senha}
+          onChange={e => setSenha(e.target.value)}
+          placeholder="Digite a senha"
+          required
+          style={{
+            width: "100%",
+            fontSize: 18,
+            padding: "12px 10px",
+            border: "1px solid #bbb",
+            borderRadius: 8,
+            outline: "none",
+            marginBottom: 20,
+            background: "#f5f8fa",
+            color: "#222",
+          }}
+        />
         <button
+          type="submit"
+          disabled={carregando}
+          style={{
+            width: "100%",
+            background: corPrimaria,
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: 18,
+            border: "none",
+            borderRadius: 8,
+            padding: "12px 0",
+            marginBottom: 10,
+            cursor: carregando ? "not-allowed" : "pointer",
+            transition: "background 0.2s",
+            boxShadow: "0 1px 6px #0001",
+          }}
+        >
+          {carregando ? "Entrando..." : "Entrar"}
+        </button>
+        {erro && (
+          <div style={{ color: "#d32f2f", margin: "8px 0", fontWeight: 500 }}>
+            {erro}
+          </div>
+        )}
+        <button
+          type="button"
           onClick={onVoltar}
           style={{
             marginTop: 16,
-            background: "#f5f8fa",
+            fontSize: 14,
+            background: "none",
             color: corPrimaria,
             border: "none",
-            padding: "7px 18px",
-            borderRadius: 6,
+            textDecoration: "underline",
             cursor: "pointer",
-            fontWeight: 500,
-            fontSize: 15
           }}
         >
           Voltar
         </button>
-      </div>
+      </form>
     </div>
   );
 }

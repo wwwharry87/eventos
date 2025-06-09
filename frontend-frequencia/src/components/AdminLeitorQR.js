@@ -3,144 +3,249 @@ import { Html5Qrcode } from "html5-qrcode";
 
 const corPrimaria = "#0479B3";
 
+function parseQR(qr) {
+  // Esperado: qrcode_id-tipo (tipo = entrada/saida)
+  const [qrcode_id, tipo] = (qr || "").split("-");
+  return { qrcode_id, tipo };
+}
+
 export default function AdminLeitorQR({ onLogout }) {
-  const [mensagem, setMensagem] = useState("");
-  const [ultimoLido, setUltimoLido] = useState("");
-  const qrRef = useRef(null);
-  const html5QrCodeRef = useRef(null);
+  const scannerRef = useRef();
+  const [resultado, setResultado] = useState(null);
+  const [erro, setErro] = useState("");
+  const [lendo, setLendo] = useState(true);
 
   useEffect(() => {
-    const qrDivId = "qr-reader";
-    if (!qrRef.current) return;
+    let scanner;
+    const iniciar = async () => {
+      setErro("");
+      setLendo(true);
+      setResultado(null);
 
-    html5QrCodeRef.current = new Html5Qrcode(qrDivId);
+      if (!scannerRef.current) return;
+      if (window.Html5QrcodeScanner) window.Html5QrcodeScanner.clear();
 
-    html5QrCodeRef.current
-      .start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        async (decodedText) => {
-          if (decodedText === ultimoLido) {
-            setMensagem("⚠️ Já leu este funcionário agora há pouco!");
-            return;
-          }
-          setUltimoLido(decodedText);
-          setMensagem("Lendo QR Code...");
+      scanner = new Html5Qrcode("leitor-qr-admin");
+      scanner
+        .start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 240, height: 240 },
+            aspectRatio: 1,
+          },
+          async (decodedText) => {
+            setLendo(false);
+            scanner.stop();
+            const { qrcode_id, tipo } = parseQR(decodedText);
 
-          const [qrcode_id, tipoLido] = decodedText.split("-");
-
-          try {
-            const res = await fetch("https://eventos-wi35.onrender.com/api/frequencia", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                qrcode_id,
-                tipo: tipoLido || "entrada",
-              }),
-            });
-            const resp = await res.json();
-            if (res.ok) {
-              setMensagem(`✅ Presença confirmada de ${resp.nome}!`);
-            } else if (
-              resp.mensagem &&
-              resp.mensagem.toLowerCase().includes("já registrada")
-            ) {
-              setMensagem("⚠️ Frequência já registrada para este funcionário.");
-            } else {
-              setMensagem(resp.mensagem || "Erro ao registrar presença.");
+            if (!qrcode_id || !tipo) {
+              setErro("QR Code inválido.");
+              return;
             }
-          } catch (e) {
-            setMensagem("Erro de conexão com o servidor.");
+            try {
+              const res = await fetch("https://eventos-wi35.onrender.com/api/frequencia", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ qrcode_id, tipo }),
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.mensagem || "Erro ao registrar frequência.");
+              setResultado({ ...data, tipo });
+              // Beep/vibrar
+              if (window.navigator.vibrate) window.navigator.vibrate(180);
+              if (window.AudioContext || window.webkitAudioContext) {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                osc.type = "sine";
+                osc.frequency.value = 900;
+                osc.connect(ctx.destination);
+                osc.start();
+                setTimeout(() => { osc.stop(); ctx.close(); }, 120);
+              }
+            } catch (err) {
+              setErro(err.message);
+            }
+          },
+          (errMsg) => {
+            setErro("Não foi possível acessar a câmera. Tente liberar permissão.");
+            setLendo(false);
           }
+        )
+        .catch((e) => setErro("Erro ao iniciar o scanner: " + e.message));
 
-          setTimeout(() => {
-            setMensagem("");
-            setUltimoLido(""); 
-            html5QrCodeRef.current && html5QrCodeRef.current.resume();
-          }, 3500);
+      return () => {
+        if (scanner) scanner.stop();
+      };
+    };
 
-          html5QrCodeRef.current.pause();
-        },
-        (errorMessage) => {}
-      )
-      .catch((err) => {
-        setMensagem("Erro ao acessar câmera: " + err);
-      });
+    iniciar();
 
     return () => {
-      html5QrCodeRef.current &&
-        html5QrCodeRef.current
-          .stop()
-          .then(() => html5QrCodeRef.current.clear())
-          .catch(() => {});
+      if (scanner) scanner.stop();
     };
-  }, [ultimoLido]);
+    // eslint-disable-next-line
+  }, []);
+
+  // Para reiniciar leitura
+  const handleReiniciar = () => {
+    window.location.reload();
+  };
 
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background: "#f5f8fa",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "flex-start",
-        paddingTop: 38
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <div
+      <header
         style={{
-          background: "#fff",
-          borderRadius: 18,
-          boxShadow: "0 2px 16px #0001",
-          padding: 30,
-          width: "100%",
-          maxWidth: 420,
-          textAlign: "center"
+          background: corPrimaria,
+          color: "#fff",
+          width: "100vw",
+          padding: "24px 0 10px 0",
+          textAlign: "center",
+          fontWeight: 700,
+          fontSize: "clamp(17px,4vw,23px)",
+          position: "relative",
         }}
       >
-        <h2 style={{ color: corPrimaria, fontWeight: 700 }}>
-          Leitura de Frequência
-        </h2>
-        <div
-          id="qr-reader"
-          ref={qrRef}
-          style={{
-            width: "100%",
-            maxWidth: 320,
-            margin: "0 auto 20px auto",
-            borderRadius: 12,
-            overflow: "hidden",
-            background: "#fafbfc"
-          }}
-        />
-        <div
-          style={{
-            marginTop: 18,
-            fontWeight: "bold",
-            fontSize: 17,
-            color: "#444"
-          }}
-        >
-          {mensagem}
-        </div>
+        Leitor de QR Code — Admin
         <button
           onClick={onLogout}
           style={{
-            marginTop: 22,
-            background: "#f5f8fa",
-            color: corPrimaria,
+            position: "absolute",
+            top: 12,
+            right: 18,
+            background: "transparent",
             border: "none",
-            padding: "9px 20px",
-            borderRadius: 8,
+            color: "#fff",
+            fontSize: 26,
             cursor: "pointer",
-            fontWeight: 500,
-            fontSize: 16,
-            boxShadow: "0 1px 3px #0001"
           }}
+          title="Sair"
         >
-          Sair do Painel
+          ⎋
         </button>
+      </header>
+
+      <div
+        style={{
+          marginTop: 14,
+          width: "98vw",
+          maxWidth: 360,
+          minHeight: 360,
+          borderRadius: 20,
+          background: "#fff",
+          boxShadow: "0 2px 12px #0002",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 18,
+          position: "relative",
+        }}
+      >
+        <div
+          ref={scannerRef}
+          id="leitor-qr-admin"
+          style={{
+            width: 240,
+            height: 240,
+            margin: "0 auto",
+            background: "#f5f8fa",
+            borderRadius: 12,
+            boxShadow: "0 2px 8px #0074b22e",
+          }}
+        />
+        {lendo && (
+          <div style={{ marginTop: 12, color: corPrimaria, fontWeight: 600 }}>
+            Aponte a câmera para o QR Code do funcionário.
+          </div>
+        )}
+        {erro && (
+          <div
+            style={{
+              marginTop: 16,
+              color: "#d32f2f",
+              fontWeight: 500,
+              textAlign: "center",
+            }}
+          >
+            {erro}
+            <button
+              style={{
+                marginTop: 10,
+                background: corPrimaria,
+                color: "#fff",
+                border: "none",
+                borderRadius: 7,
+                padding: "7px 18px",
+                fontWeight: 600,
+                cursor: "pointer",
+                marginLeft: 8,
+              }}
+              onClick={handleReiniciar}
+            >
+              Reiniciar
+            </button>
+          </div>
+        )}
+        {resultado && (
+          <div
+            style={{
+              marginTop: 16,
+              background: "#eafaea",
+              color: "#114",
+              borderRadius: 8,
+              padding: "15px 10px",
+              boxShadow: "0 1px 6px #34b23318",
+              textAlign: "center",
+              fontSize: 16,
+              fontWeight: 500,
+            }}
+          >
+            {resultado.nome ? (
+              <>
+                <div>
+                  ✅ Frequência {resultado.tipo === "entrada" ? "de ENTRADA" : "de SAÍDA"} registrada!
+                </div>
+                <div style={{ color: corPrimaria, fontWeight: 700, marginTop: 3 }}>
+                  {resultado.nome}
+                </div>
+                <div style={{ fontSize: 14, color: "#666" }}>
+                  {new Date(resultado.data_hora).toLocaleString("pt-BR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })}
+                </div>
+              </>
+            ) : (
+              <span>Registro não encontrado.</span>
+            )}
+            <button
+              onClick={handleReiniciar}
+              style={{
+                marginTop: 10,
+                background: corPrimaria,
+                color: "#fff",
+                border: "none",
+                borderRadius: 7,
+                padding: "7px 18px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Ler outro
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

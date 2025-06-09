@@ -1,106 +1,60 @@
 import React, { useState } from "react";
-import LoginForm from "./components/LoginForm";
-import CarrosselFrequencia from "./components/CarrosselFrequencia"; // NOVO
-import AdminLogin from "./components/AdminLogin";
-import AdminLeitorQR from "./components/AdminLeitorQR";
+import LoginForm from "./LoginForm";
+import CarrosselFrequencia from "./CarrosselFrequencia";
+import AdminLogin from "./AdminLogin";
+import AdminLeitorQR from "./AdminLeitorQR";
 
 function App() {
-  // Estados para controle do fluxo
+  const [pagina, setPagina] = useState("login");
   const [funcionario, setFuncionario] = useState(null);
-  const [erro, setErro] = useState("");
-  const [adminLogado, setAdminLogado] = useState(false);
-  const [mostrarAdminLogin, setMostrarAdminLogin] = useState(false);
+  const [admin, setAdmin] = useState(false);
 
-  // Função de login do funcionário (apenas CPF)
-  async function handleLogin({ cpf }) {
-    setErro("");
-    try {
-      const response = await fetch("https://eventos-wi35.onrender.com/api/funcionario-cpf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cpf }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setFuncionario(data);
-        localStorage.setItem("funcionario", JSON.stringify(data));
-      } else {
-        setErro(data.mensagem || "Erro ao autenticar");
-      }
-    } catch (e) {
-      setErro("Erro de conexão com o servidor");
-    }
-  }
+  // LOGIN FUNCIONÁRIO
+  const handleLogin = (dadosFuncionario) => {
+    setFuncionario(dadosFuncionario);
+    setPagina("carrossel");
+  };
 
-  // Mantém login do funcionário na sessão
-  React.useEffect(() => {
-    const salvo = localStorage.getItem("funcionario");
-    if (salvo) {
-      setFuncionario(JSON.parse(salvo));
-    }
-  }, []);
-
-  function handleLogout() {
+  // LOGOUT
+  const handleLogout = () => {
     setFuncionario(null);
-    localStorage.removeItem("funcionario");
-  }
+    setAdmin(false);
+    setPagina("login");
+  };
 
-  // Função de login do admin
-  function handleAdminLogin(usuario, senha) {
-    // Pode trocar para buscar do backend se quiser mais segurança
-    if (usuario === "admin" && senha === "123456") {
-      setAdminLogado(true);
-      setMostrarAdminLogin(false);
-    } else {
-      alert("Usuário ou senha incorretos!");
-    }
-  }
+  // LOGIN ADMIN
+  const handleAdminLogin = () => {
+    setAdmin(true);
+    setPagina("admin");
+  };
 
-  function handleAdminLogout() {
-    setAdminLogado(false);
-  }
+  // LOGOUT ADMIN
+  const handleAdminLogout = () => {
+    setAdmin(false);
+    setPagina("login");
+  };
 
-  // Renderiza painel do admin se logado
-  if (adminLogado) return <AdminLeitorQR onLogout={handleAdminLogout} />;
-
-  // Renderiza tela de login admin se ativado
-  if (mostrarAdminLogin)
+  // Renderização condicional
+  if (pagina === "login")
     return (
-      <AdminLogin
-        onLogin={handleAdminLogin}
-        onVoltar={() => setMostrarAdminLogin(false)}
+      <LoginForm
+        onLogin={handleLogin}
+        onAdminClick={() => setPagina("admin-login")}
       />
     );
 
-  // Renderiza tela de funcionário (login ou fluxo do evento)
-  return (
-    <div style={{ minHeight: "100vh", background: "#f5f6fa", position: "relative" }}>
-      {!funcionario ? (
-        <>
-          <LoginForm onLogin={handleLogin} erro={erro} />
-          <button
-            onClick={() => setMostrarAdminLogin(true)}
-            style={{
-              position: "absolute",
-              bottom: 20,
-              right: 20,
-              padding: "8px 20px",
-              background: "#222",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              cursor: "pointer",
-              zIndex: 99
-            }}
-          >
-            Sou Administrador
-          </button>
-        </>
-      ) : (
-        <CarrosselFrequencia funcionario={funcionario} onLogout={handleLogout} />
-      )}
-    </div>
-  );
+  if (pagina === "carrossel")
+    return (
+      <CarrosselFrequencia funcionario={funcionario} onLogout={handleLogout} />
+    );
+
+  if (pagina === "admin-login")
+    return <AdminLogin onLogin={handleAdminLogin} onVoltar={() => setPagina("login")} />;
+
+  if (pagina === "admin")
+    return <AdminLeitorQR onLogout={handleAdminLogout} />;
+
+  return <div>Algo deu errado. Tente novamente.</div>;
 }
 
 export default App;
