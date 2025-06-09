@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import LoginForm from "./LoginForm";
-import CarrosselFrequencia from "./CarrosselFrequencia";
-import AdminLogin from "./AdminLogin";
-import AdminLeitorQR from "./AdminLeitorQR";
+import LoginForm from "././components/LoginForm";
+import CarrosselFrequencia from "././components/CarrosselFrequencia";
+import AdminLogin from "././components/AdminLogin";
+import AdminLeitorQR from "././components/AdminLeitorQR";
 
 function App() {
   const [pagina, setPagina] = useState("login");
