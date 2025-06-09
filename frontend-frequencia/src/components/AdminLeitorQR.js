@@ -1,16 +1,21 @@
 import React, { useState } from "react";
-import { useZxing } from "react-zxing";
+import QrReader from "react-qr-barcode-scanner";
 
 export default function AdminLeitorQR() {
+  const [data, setData] = useState("");
   const [mensagem, setMensagem] = useState("");
-  const [ultimoQR, setUltimoQR] = useState("");
 
-  const onDecode = async (result) => {
-    if (result === ultimoQR) return;
-    setUltimoQR(result);
+  // Função para lidar quando um QR code é lido
+  const handleScan = async (result) => {
+    if (!result) return;
+    if (result.text === data) return; // evita múltiplas leituras iguais
+    setData(result.text);
 
     setMensagem("Lendo QR Code...");
-    const [qrcode_id, tipoLido] = result.split("-");
+
+    // Esperado: qrcode_id-tipo (ex: 12345678900-entrada)
+    const [qrcode_id, tipoLido] = result.text.split("-");
+
     try {
       const res = await fetch("https://eventos-wi35.onrender.com/api/frequencia", {
         method: "POST",
@@ -29,25 +34,28 @@ export default function AdminLeitorQR() {
     } catch (e) {
       setMensagem("Erro de conexão com o servidor.");
     }
+
+    // Reseta para permitir nova leitura após alguns segundos
     setTimeout(() => {
       setMensagem("");
-      setUltimoQR("");
+      setData("");
     }, 3500);
   };
-
-  const { ref } = useZxing({
-    onDecode,
-    paused: false,
-  });
 
   return (
     <div style={{ padding: 24, maxWidth: 420, margin: "0 auto" }}>
       <h2>Painel do Administrador</h2>
       <p>Aponte a câmera para o QR Code do participante:</p>
       <div style={{ maxWidth: 350, margin: "0 auto" }}>
-        <video ref={ref} style={{ width: "100%", borderRadius: 10 }} />
+        <QrReader
+          onUpdate={handleScan}
+          constraints={{ facingMode: "environment" }}
+          style={{ width: "100%", borderRadius: 10 }}
+        />
       </div>
-      <div style={{ marginTop: 24, fontWeight: "bold", minHeight: 30 }}>{mensagem}</div>
+      <div style={{ marginTop: 24, fontWeight: "bold", minHeight: 30 }}>
+        {mensagem}
+      </div>
     </div>
   );
 }
