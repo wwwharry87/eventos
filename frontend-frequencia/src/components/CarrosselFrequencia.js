@@ -1,9 +1,15 @@
 import React, { useEffect, useState, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { Swiper, SwiperSlide } from "swiper/react";
+import SwiperCore from 'swiper';
+import "swiper/css";
+import "swiper/css/pagination";
+import { Pagination } from "swiper/modules";
 
 const corPrimaria = "#0479B3";
 const corSecundaria = "#FFD600";
 
+// beep
 function beep(frequency = 600, duration = 120) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -20,14 +26,13 @@ function beep(frequency = 600, duration = 120) {
 }
 
 export default function CarrosselFrequencia({ funcionario, onLogout }) {
-  const [etapa, setEtapa] = useState(0); // 0: entrada, 1: info, 2: saída
   const [presencaConfirmada, setPresencaConfirmada] = useState(false);
-  const [pollingAtivo, setPollingAtivo] = useState(true);
+  const [swiperReady, setSwiperReady] = useState(false);
+  const swiperRef = useRef(null);
   const beepedRef = useRef(false);
 
   // Polling para confirmação da entrada
   useEffect(() => {
-    if (!pollingAtivo) return;
     if (presencaConfirmada) return;
     const interval = setInterval(async () => {
       const res = await fetch(
@@ -36,24 +41,39 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
       const data = await res.json();
       if (data.confirmada) {
         setPresencaConfirmada(true);
-        setPollingAtivo(false);
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [funcionario.cpf, presencaConfirmada, pollingAtivo]);
+  }, [funcionario.cpf, presencaConfirmada]);
 
-  // Quando confirma presença, vibra/beepa/avança (se usuário clicar ou automático)
+  // Avança AUTOMATICAMENTE após confirmação
   useEffect(() => {
-    if (presencaConfirmada && !beepedRef.current) {
+    if (
+      presencaConfirmada &&
+      swiperReady &&
+      swiperRef.current &&
+      !beepedRef.current
+    ) {
       if (window.navigator.vibrate) {
         window.navigator.vibrate(180);
       }
       beep();
       beepedRef.current = true;
+      setTimeout(() => {
+        // Avança para próxima tela
+        swiperRef.current.slideNext();
+      }, 900);
     }
-  }, [presencaConfirmada]);
+  }, [presencaConfirmada, swiperReady]);
 
-  // Para mobile/iphone: preencher a tela toda respeitando área segura
+  // Bloquear voltar para QRCode entrada
+  function bloquearVoltar(swiper) {
+    if (swiper.activeIndex === 0 && presencaConfirmada) {
+      swiper.slideTo(1, 0);
+    }
+  }
+
+  // Preencher toda a área segura
   const mainStyle = {
     minHeight: "100dvh",
     width: "100vw",
@@ -66,157 +86,11 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
     paddingRight: "env(safe-area-inset-right)",
     boxSizing: "border-box",
     overflow: "hidden",
-    position: "relative",
+    position: "relative"
   };
-
-  // Avança de etapa (manual pelo botão)
-  const nextEtapa = () => setEtapa((prev) => Math.min(prev + 1, 2));
-  // Volta (se quiser dar essa opção)
-  const prevEtapa = () => setEtapa((prev) => Math.max(prev - 1, 0));
-
-  // Cards do fluxo
-  const cards = [
-    // ETAPA 0 - QRCode ENTRADA
-    <div key="entrada" className="card-frequencia">
-      <h3 style={{ color: corPrimaria, marginBottom: 12 }}>
-        Bem-vindo(a), <span style={{ color: "#222" }}>{funcionario.nome}</span>
-      </h3>
-      <p style={{ fontWeight: 500, marginBottom: 12 }}>
-        Mostre este QR Code na <b>ENTRADA</b> do evento:
-      </p>
-      <QRCodeSVG
-        value={funcionario.qrcode_id + "-entrada"}
-        size={window.innerWidth > 430 ? 180 : window.innerWidth * 0.6}
-      />
-      <div style={{ margin: "18px 0 8px", color: "#888", fontSize: 15 }}>
-        Aguarde a leitura do administrador...
-      </div>
-      {!presencaConfirmada ? (
-        <span style={{ color: corSecundaria, fontWeight: 600 }}>
-          ⏳ Esperando conferência do admin...
-        </span>
-      ) : (
-        <span style={{ color: "green", fontWeight: "bold" }}>
-          ✅ Presença confirmada!
-        </span>
-      )}
-      {/* Avança só depois da confirmação */}
-      <button
-        className="btn-next"
-        disabled={!presencaConfirmada}
-        style={{
-          background: presencaConfirmada ? corPrimaria : "#ddd",
-          color: "#fff",
-          fontWeight: "bold",
-          marginTop: 32,
-          fontSize: 18,
-          padding: "12px 36px",
-          borderRadius: 10,
-          border: "none",
-          cursor: presencaConfirmada ? "pointer" : "not-allowed",
-          transition: "all .2s"
-        }}
-        onClick={nextEtapa}
-      >
-        Avançar
-      </button>
-    </div>,
-
-    // ETAPA 1 - INFORMAÇÕES
-    <div key="infos" className="card-frequencia">
-      <h3 style={{ color: corPrimaria, marginBottom: 8 }}>Presença confirmada!</h3>
-      <p style={{ fontWeight: 500, marginBottom: 12 }}>
-        Olá, <b>{funcionario.nome}</b>! <br />
-        Aproveite a <b>4ª Edição do Encontro do Educacenso de Marabá-PA</b>.
-        <br />
-        <span role="img" aria-label="confetti" style={{ fontSize: 32, marginTop: 10 }}>🎉</span>
-      </p>
-      {funcionario.aniversariante && (
-        <p style={{
-          color: "#ff9800",
-          fontWeight: "bold",
-          background: "#fffbe9",
-          padding: 8,
-          borderRadius: 8,
-          margin: "18px 0",
-        }}>
-          🎂 Parabéns, hoje é seu aniversário!
-        </p>
-      )}
-      <div style={{ textAlign: "left", margin: "18px 0 0 0" }}>
-        <div style={{ color: "#4e5d6c", fontWeight: 600, fontSize: 17, marginBottom: 8 }}>
-          ➤ Regras rápidas:
-        </div>
-        <ul style={{ lineHeight: 1.5, fontSize: 15, paddingLeft: 16 }}>
-          <li>Traga documento com foto.</li>
-          <li>Respeite horários de entrada e saída.</li>
-          <li>Use este app sempre que solicitado.</li>
-          <li>Em caso de dúvida, procure a equipe organizadora.</li>
-        </ul>
-      </div>
-      <button className="btn-next" style={{
-        background: corPrimaria,
-        color: "#fff",
-        fontWeight: "bold",
-        marginTop: 32,
-        fontSize: 18,
-        padding: "12px 36px",
-        borderRadius: 10,
-        border: "none",
-        cursor: "pointer"
-      }} onClick={nextEtapa}>
-        Gerar QR de saída
-      </button>
-    </div>,
-
-    // ETAPA 2 - QRCode SAÍDA
-    <div key="saida" className="card-frequencia">
-      <h3 style={{ color: corPrimaria, marginBottom: 12 }}>Saída do Evento</h3>
-      <p style={{ fontWeight: 500 }}>
-        Ao FINALIZAR, mostre este QR Code para registrar sua SAÍDA:
-      </p>
-      <QRCodeSVG
-        value={funcionario.qrcode_id + "-saida"}
-        size={window.innerWidth > 430 ? 180 : window.innerWidth * 0.6}
-      />
-      <div style={{ color: "#888", marginTop: 16, fontSize: 15 }}>
-        Obrigado pela sua participação!
-      </div>
-    </div>
-  ];
-
-  // CSS Card (pode jogar em um arquivo .css se quiser)
-  const cardStyle = `
-    .card-frequencia {
-      background: #fff;
-      border-radius: 18px;
-      box-shadow: 0 2px 18px #0002;
-      margin: 5vw 1vw;
-      padding: 7vw 4vw 6vw 4vw;
-      text-align: center;
-      min-height: 60vh;
-      max-width: 500px;
-      width: 98vw;
-      margin-left: auto;
-      margin-right: auto;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      animation: fadeInCard .7s;
-    }
-    .btn-next {
-      box-shadow: 0 2px 8px #0001;
-    }
-    @keyframes fadeInCard {
-      from { opacity: 0; transform: translateY(20px);}
-      to { opacity: 1; transform: translateY(0);}
-    }
-  `;
 
   return (
     <div style={mainStyle}>
-      <style>{cardStyle}</style>
       <header
         style={{
           background: corPrimaria,
@@ -259,9 +133,109 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
           </span>
         </button>
       </header>
-      <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {cards[etapa]}
-      </main>
+
+      <Swiper
+        modules={[Pagination]}
+        pagination={{ clickable: true }}
+        onSwiper={(swiper) => {
+          swiperRef.current = swiper;
+          setSwiperReady(true);
+        }}
+        onSlideChange={bloquearVoltar}
+        allowTouchMove={presencaConfirmada} // swipe só após confirmar!
+        initialSlide={0}
+        style={{
+          flex: 1,
+          minHeight: "calc(100vh - 110px)",
+          paddingTop: "2vh",
+          paddingBottom: "2vh",
+        }}
+      >
+        {/* QR ENTRADA */}
+        <SwiperSlide>
+          <div className="card-frequencia" style={cardStyle}>
+            <h3 style={{ color: corPrimaria, marginBottom: 12 }}>
+              Bem-vindo(a), <span style={{ color: "#222" }}>{funcionario.nome}</span>
+            </h3>
+            <p style={{ fontWeight: 500, marginBottom: 12 }}>
+              Mostre este QR Code na <b>ENTRADA</b> do evento:
+            </p>
+            <QRCodeSVG
+              value={funcionario.qrcode_id + "-entrada"}
+              size={window.innerWidth > 430 ? 180 : window.innerWidth * 0.6}
+            />
+            <div style={{ margin: "18px 0 8px", color: "#888", fontSize: 15 }}>
+              Aguarde a leitura do administrador...
+            </div>
+            {!presencaConfirmada ? (
+              <span style={{ color: corSecundaria, fontWeight: 600 }}>
+                ⏳ Esperando conferência do admin...
+              </span>
+            ) : (
+              <span style={{ color: "green", fontWeight: "bold" }}>
+                ✅ Presença confirmada!
+              </span>
+            )}
+          </div>
+        </SwiperSlide>
+
+        {/* INFO */}
+        <SwiperSlide>
+          <div className="card-frequencia" style={cardStyle}>
+            <h3 style={{ color: corPrimaria, marginBottom: 8 }}>Presença confirmada!</h3>
+            <p style={{ fontWeight: 500, marginBottom: 12 }}>
+              Olá, <b>{funcionario.nome}</b>! <br />
+              Aproveite a <b>4ª Edição do Encontro do Educacenso de Marabá-PA</b>.
+              <br />
+              <span role="img" aria-label="confetti" style={{ fontSize: 32, marginTop: 10 }}>🎉</span>
+            </p>
+            {funcionario.aniversariante && (
+              <p style={{
+                color: "#ff9800",
+                fontWeight: "bold",
+                background: "#fffbe9",
+                padding: 8,
+                borderRadius: 8,
+                margin: "18px 0",
+              }}>
+                🎂 Parabéns, hoje é seu aniversário!
+              </p>
+            )}
+            <div style={{ textAlign: "left", margin: "18px 0 0 0" }}>
+              <div style={{ color: "#4e5d6c", fontWeight: 600, fontSize: 17, marginBottom: 8 }}>
+                ➤ Regras rápidas:
+              </div>
+              <ul style={{ lineHeight: 1.5, fontSize: 15, paddingLeft: 16 }}>
+                <li>Traga documento com foto.</li>
+                <li>Respeite horários de entrada e saída.</li>
+                <li>Use este app sempre que solicitado.</li>
+                <li>Em caso de dúvida, procure a equipe organizadora.</li>
+              </ul>
+            </div>
+            <div style={{ marginTop: 32, color: "#999", fontSize: 15 }}>
+              Deslize para a esquerda para gerar o QR Code de saída.
+            </div>
+          </div>
+        </SwiperSlide>
+
+        {/* QR SAÍDA */}
+        <SwiperSlide>
+          <div className="card-frequencia" style={cardStyle}>
+            <h3 style={{ color: corPrimaria, marginBottom: 12 }}>Saída do Evento</h3>
+            <p style={{ fontWeight: 500 }}>
+              Ao FINALIZAR, mostre este QR Code para registrar sua SAÍDA:
+            </p>
+            <QRCodeSVG
+              value={funcionario.qrcode_id + "-saida"}
+              size={window.innerWidth > 430 ? 180 : window.innerWidth * 0.6}
+            />
+            <div style={{ color: "#888", marginTop: 16, fontSize: 15 }}>
+              Obrigado pela sua participação!
+            </div>
+          </div>
+        </SwiperSlide>
+      </Swiper>
+
       <footer
         style={{
           textAlign: "center",
@@ -276,3 +250,23 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
     </div>
   );
 }
+
+// Card style
+const cardStyle = {
+  background: "#fff",
+  borderRadius: 18,
+  boxShadow: "0 2px 18px #0002",
+  margin: "5vw 1vw",
+  padding: "7vw 4vw 6vw 4vw",
+  textAlign: "center",
+  minHeight: "60vh",
+  maxWidth: 500,
+  width: "98vw",
+  marginLeft: "auto",
+  marginRight: "auto",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  animation: "fadeInCard .7s"
+};

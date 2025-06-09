@@ -1,4 +1,8 @@
 import React, { useState } from "react";
+import InputMask from "react-input-mask";
+
+// Importe o logo se já tiver em src/assets/logo.png
+// import logoEvento from "../assets/logo.png";
 
 const corPrimaria = "#0479B3";
 
@@ -7,8 +11,12 @@ export default function LoginForm({ onLogin, erro }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!cpf) return;
-    onLogin({ cpf });
+    const cpfNumerico = cpf.replace(/\D/g, "");
+    if (cpfNumerico.length !== 11) {
+      alert("CPF inválido!");
+      return;
+    }
+    onLogin({ cpf: cpfNumerico });
   }
 
   return (
@@ -27,34 +35,55 @@ export default function LoginForm({ onLogin, erro }) {
           background: "#fff",
           borderRadius: 18,
           boxShadow: "0 2px 16px #0001",
-          padding: 36,
+          padding: 32,
           minWidth: 300,
-          maxWidth: 350,
+          maxWidth: 370,
           textAlign: "center"
         }}
       >
-        <h2 style={{ color: corPrimaria, fontWeight: 700, marginBottom: 8 }}>
-          4ª Edição do Encontro<br />do Educacenso de Marabá-PA
+        {/* Logo do evento - ajuste o src se salvar no projeto */}
+        <img
+          src="/logo-evento.png"
+          alt="Logo do Evento"
+          style={{
+            maxWidth: 140,
+            marginBottom: 18,
+            borderRadius: 12,
+            boxShadow: "0 2px 10px #0002"
+          }}
+        />
+
+        <h2 style={{ color: corPrimaria, fontWeight: 700, marginBottom: 10, lineHeight: 1.25 }}>
+          4ª Edição do Encontro<br />
+          do Educacenso de Marabá-PA
         </h2>
-        <p style={{ color: "#444", margin: "14px 0 18px" }}>
+        <p style={{ color: "#444", margin: "10px 0 20px" }}>
           Identifique-se para participar do evento
         </p>
         <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="Digite seu CPF"
-            maxLength={11}
+          <InputMask
+            mask="999.999.999-99"
+            maskChar=""
+            type="tel"
+            inputMode="numeric"
+            pattern="\d*"
+            placeholder="000.000.000-00"
             value={cpf}
-            onChange={(e) => setCpf(e.target.value.replace(/\D/g, ""))}
+            onChange={e => setCpf(e.target.value)}
             style={{
               width: "100%",
               padding: "12px 10px",
-              fontSize: 16,
+              fontSize: 19,
               borderRadius: 8,
               border: "1px solid #e0e0e0",
               marginBottom: 18,
-              outline: "none"
+              textAlign: "center",
+              outline: "none",
+              letterSpacing: 2,
             }}
+            autoFocus
+            required
+            maxLength={14}
           />
           <button
             type="submit"
@@ -65,7 +94,7 @@ export default function LoginForm({ onLogin, erro }) {
               fontSize: 17,
               border: "none",
               borderRadius: 8,
-              padding: "11px 0",
+              padding: "12px 0",
               width: "100%",
               boxShadow: "0 1px 5px #0001",
               cursor: "pointer"
