@@ -17,7 +17,7 @@ export default function AdminLeitorQR({ onLogout }) {
   const [erro, setErro] = useState("");
   const [lendo, setLendo] = useState(true);
   const [cameraIniciada, setCameraIniciada] = useState(false);
-  const html5QrCodeRef = useRef(null);
+  const html5QrcodeRef = useRef(null);
 
   // Função para reiniciar a leitura
   const reiniciarLeitura = async () => {
@@ -25,15 +25,20 @@ export default function AdminLeitorQR({ onLogout }) {
     setErro("");
     setLendo(true);
     
-    if (html5QrCodeRef.current) {
+    if (html5QrcodeRef.current) {
       try {
         // Primeiro pare o scanner se estiver rodando
-        if (html5QrCodeRef.current.isScanning) {
-          await html5QrCodeRef.current.stop();
+        if (html5QrcodeRef.current.isScanning) {
+          await html5QrcodeRef.current.stop().catch(stopErr => {
+            console.warn("Erro ao parar scanner:", stopErr);
+          });
         }
         
+        // Pequeno delay para garantir que o scanner foi parado
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
         // Depois inicie novamente
-        await html5QrCodeRef.current.start(
+        await html5QrcodeRef.current.start(
           { facingMode: "environment" },
           {
             fps: 10,
@@ -45,8 +50,12 @@ export default function AdminLeitorQR({ onLogout }) {
         );
         setCameraIniciada(true);
       } catch (err) {
-        setErro("Erro ao reiniciar scanner: " + err.message);
+        console.error("Erro ao reiniciar scanner:", err);
+        setErro("Erro ao reiniciar scanner. Por favor, recarregue a página.");
         setCameraIniciada(false);
+        
+        // Tenta novamente após 3 segundos
+        setTimeout(reiniciarLeitura, 3000);
       }
     }
   };
@@ -133,7 +142,7 @@ export default function AdminLeitorQR({ onLogout }) {
       }
 
       const scanner = new Html5Qrcode("leitor-qr-admin");
-      html5QrCodeRef.current = scanner;
+      html5QrcodeRef.current = scanner;
 
       try {
         await scanner.start(
@@ -148,6 +157,7 @@ export default function AdminLeitorQR({ onLogout }) {
         );
         setCameraIniciada(true);
       } catch (err) {
+        console.error("Erro ao iniciar scanner:", err);
         setErro("Erro ao iniciar scanner: " + err.message);
         setCameraIniciada(false);
         
@@ -161,17 +171,16 @@ export default function AdminLeitorQR({ onLogout }) {
     initScanner();
 
     return () => {
-      const stopScanner = async () => {
-        if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+      const cleanup = async () => {
+        if (html5QrcodeRef.current?.isScanning) {
           try {
-            await html5QrCodeRef.current.stop();
-            setCameraIniciada(false);
+            await html5QrcodeRef.current.stop();
           } catch (err) {
-            console.error("Erro ao parar scanner:", err);
+            console.warn("Erro na limpeza do scanner:", err);
           }
         }
       };
-      stopScanner();
+      cleanup();
     };
   }, []);
 
@@ -341,9 +350,15 @@ export default function AdminLeitorQR({ onLogout }) {
                 width: "100%",
                 transition: "background 0.2s",
               }}
-              onClick={reiniciarLeitura}
+              onClick={() => {
+                if (erro.includes("recarregue")) {
+                  window.location.reload();
+                } else {
+                  reiniciarLeitura();
+                }
+              }}
             >
-              Tentar novamente
+              {erro.includes("recarregue") ? "Recarregar Página" : "Tentar Novamente"}
             </button>
           </div>
         )}
