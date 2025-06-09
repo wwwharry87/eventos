@@ -5,6 +5,7 @@ import { Html5Qrcode } from "html5-qrcode";
 
 export default function AdminLeitorQR() {
   const [mensagem, setMensagem] = useState("");
+  const [ultimoLido, setUltimoLido] = useState("");
   const qrRef = useRef(null);
   const html5QrCodeRef = useRef(null);
 
@@ -12,19 +13,21 @@ export default function AdminLeitorQR() {
     const qrDivId = "qr-reader";
     if (!qrRef.current) return;
 
-    // Cria a instância só uma vez
     html5QrCodeRef.current = new Html5Qrcode(qrDivId);
 
     html5QrCodeRef.current
       .start(
         { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: 250,
-        },
+        { fps: 10, qrbox: 250 },
         async (decodedText) => {
+          // Checa se já leu este QR recentemente
+          if (decodedText === ultimoLido) {
+            setMensagem("⚠️ Já leu este funcionário agora há pouco!");
+            return;
+          }
+          setUltimoLido(decodedText);
           setMensagem("Lendo QR Code...");
-          // Esperado: qrcode_id-tipo
+
           const [qrcode_id, tipoLido] = decodedText.split("-");
 
           try {
@@ -39,6 +42,11 @@ export default function AdminLeitorQR() {
             const resp = await res.json();
             if (res.ok) {
               setMensagem(`✅ Presença confirmada de ${resp.nome}!`);
+            } else if (
+              resp.mensagem &&
+              resp.mensagem.toLowerCase().includes("já registrada")
+            ) {
+              setMensagem("⚠️ Frequência já registrada para este funcionário.");
             } else {
               setMensagem(resp.mensagem || "Erro ao registrar presença.");
             }
@@ -46,24 +54,20 @@ export default function AdminLeitorQR() {
             setMensagem("Erro de conexão com o servidor.");
           }
 
-          // Aguarda alguns segundos antes de permitir nova leitura
           setTimeout(() => {
             setMensagem("");
+            setUltimoLido(""); // Permite nova leitura do mesmo após um tempo
             html5QrCodeRef.current && html5QrCodeRef.current.resume();
           }, 3500);
 
-          // Pausa para não ler várias vezes em seguida
           html5QrCodeRef.current.pause();
         },
-        (errorMessage) => {
-          // Ignorar erros normais de leitura
-        }
+        (errorMessage) => {}
       )
       .catch((err) => {
         setMensagem("Erro ao acessar câmera: " + err);
       });
 
-    // Limpa na desmontagem do componente
     return () => {
       html5QrCodeRef.current &&
         html5QrCodeRef.current
@@ -71,7 +75,7 @@ export default function AdminLeitorQR() {
           .then(() => html5QrCodeRef.current.clear())
           .catch(() => {});
     };
-  }, []);
+  }, [ultimoLido]);
 
   return (
     <div style={{ padding: 24, maxWidth: 420, margin: "0 auto" }}>

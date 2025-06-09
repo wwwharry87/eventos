@@ -7,7 +7,9 @@ export default function TelaQRCodeEntrada({ funcionario }) {
   // Faz polling para saber se a presença foi registrada
   useEffect(() => {
     const interval = setInterval(async () => {
-      const res = await fetch(`https://eventos-wi35.onrender.com/api/checar-frequencia?cpf=${funcionario.cpf}&tipo=entrada`);
+      const res = await fetch(
+        `https://eventos-wi35.onrender.com/api/checar-frequencia?cpf=${funcionario.cpf}&tipo=entrada`
+      );
       const data = await res.json();
       if (data.confirmada) {
         setPresencaConfirmada(true);
@@ -22,8 +24,12 @@ export default function TelaQRCodeEntrada({ funcionario }) {
     return (
       <div style={{ textAlign: "center", padding: 32 }}>
         <h2>Presença confirmada!</h2>
-        <p>Bem-vindo ao evento.<br />Aproveite as atividades e siga as instruções abaixo.</p>
-        {/* aqui pode colocar informações do evento */}
+        <p>
+          Olá, <b>{funcionario.nome}</b>!<br />
+          Bem-vindo(a) ao evento.<br />
+          Aproveite as atividades e siga as instruções abaixo.
+        </p>
+        <span role="img" aria-label="confetti" style={{ fontSize: 48 }}>🎉</span>
       </div>
     );
   }
