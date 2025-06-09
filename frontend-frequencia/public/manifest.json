@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Frequencia Evento",
+  "name": "Leitor de QR Code - Prefeitura de Marabá",
+  "description": "Aplicativo para registro de frequência via QR Code",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,16 +11,33 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "start_url": ".",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "portrait",
+  "theme_color": "#0479B3",
+  "background_color": "#F7FAFC",
+  "categories": ["business", "productivity"],
+  "screenshots": [
+    {
+      "src": "screenshot1.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "features": [
+    "camera",
+    "geolocation"
+  ]
 }

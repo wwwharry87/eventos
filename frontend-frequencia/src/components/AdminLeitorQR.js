@@ -16,25 +16,38 @@ export default function AdminLeitorQR({ onLogout }) {
   const [resultado, setResultado] = useState(null);
   const [erro, setErro] = useState("");
   const [lendo, setLendo] = useState(true);
+  const [cameraIniciada, setCameraIniciada] = useState(false);
   const html5QrCodeRef = useRef(null);
 
   // Função para reiniciar a leitura
-  const reiniciarLeitura = () => {
+  const reiniciarLeitura = async () => {
     setResultado(null);
     setErro("");
     setLendo(true);
     
     if (html5QrCodeRef.current) {
-      html5QrCodeRef.current.start(
-        { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 240, height: 240 },
-          aspectRatio: 1,
-        },
-        handleDecodedText,
-        handleScanError
-      ).catch(err => setErro("Erro ao reiniciar scanner: " + err.message));
+      try {
+        // Primeiro pare o scanner se estiver rodando
+        if (html5QrCodeRef.current.isScanning) {
+          await html5QrCodeRef.current.stop();
+        }
+        
+        // Depois inicie novamente
+        await html5QrCodeRef.current.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 240, height: 240 },
+            aspectRatio: 1,
+          },
+          handleDecodedText,
+          handleScanError
+        );
+        setCameraIniciada(true);
+      } catch (err) {
+        setErro("Erro ao reiniciar scanner: " + err.message);
+        setCameraIniciada(false);
+      }
     }
   };
 
@@ -75,8 +88,12 @@ export default function AdminLeitorQR({ onLogout }) {
 
   // Função para lidar com erros de leitura
   const handleScanError = (errMsg) => {
-    setErro("Não foi possível acessar a câmera. Tente liberar permissão.");
-    setLendo(false);
+    // Ignora erros de "NotFoundException" que são normais durante a leitura
+    if (!errMsg.includes("NotFoundException")) {
+      setErro("Não foi possível acessar a câmera. Tente liberar permissão.");
+      setLendo(false);
+      setCameraIniciada(false);
+    }
   };
 
   // Função beep sonoro
@@ -92,28 +109,69 @@ export default function AdminLeitorQR({ onLogout }) {
         oscillator.stop();
         ctx.close();
       }, duration);
-    } catch (e) {}
+    } catch (e) {
+      console.error("Erro no beep:", e);
+    }
   };
 
   useEffect(() => {
-    const scanner = new Html5Qrcode("leitor-qr-admin");
-    html5QrCodeRef.current = scanner;
+    const initScanner = async () => {
+      // Delay para garantir que o DOM esteja pronto
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const scannerElement = document.getElementById('leitor-qr-admin');
+      if (!scannerElement) {
+        setErro("Elemento do scanner não encontrado");
+        return;
+      }
 
-    scanner.start(
-      { facingMode: "environment" },
-      {
-        fps: 10,
-        qrbox: { width: 240, height: 240 },
-        aspectRatio: 1,
-      },
-      handleDecodedText,
-      handleScanError
-    ).catch(err => setErro("Erro ao iniciar scanner: " + err.message));
+      // Verifica se o elemento está visível
+      const rect = scannerElement.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        setErro("Elemento do scanner não está visível");
+        return;
+      }
+
+      const scanner = new Html5Qrcode("leitor-qr-admin");
+      html5QrCodeRef.current = scanner;
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 240, height: 240 },
+            aspectRatio: 1,
+          },
+          handleDecodedText,
+          handleScanError
+        );
+        setCameraIniciada(true);
+      } catch (err) {
+        setErro("Erro ao iniciar scanner: " + err.message);
+        setCameraIniciada(false);
+        
+        // Tenta novamente após 1 segundo se for um erro de permissão
+        if (err.message.includes("Permission") || err.message.includes("permission")) {
+          setTimeout(initScanner, 1000);
+        }
+      }
+    };
+
+    initScanner();
 
     return () => {
-      if (scanner && scanner.isScanning) {
-        scanner.stop().catch(err => console.error("Erro ao parar scanner:", err));
-      }
+      const stopScanner = async () => {
+        if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+          try {
+            await html5QrCodeRef.current.stop();
+            setCameraIniciada(false);
+          } catch (err) {
+            console.error("Erro ao parar scanner:", err);
+          }
+        }
+      };
+      stopScanner();
     };
   }, []);
 
@@ -128,6 +186,7 @@ export default function AdminLeitorQR({ onLogout }) {
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
         fontFamily: "'Segoe UI', Roboto, sans-serif",
+        position: 'relative',
       }}
     >
       {/* Header moderno */}
@@ -135,7 +194,7 @@ export default function AdminLeitorQR({ onLogout }) {
         style={{
           background: `linear-gradient(135deg, ${corPrimaria} 0%, #03679a 100%)`,
           color: "#fff",
-          width: "100vw",
+          width: "100%",
           padding: "20px 0 16px 0",
           textAlign: "center",
           fontWeight: 700,
@@ -190,19 +249,53 @@ export default function AdminLeitorQR({ onLogout }) {
           border: "1px solid rgba(0, 0, 0, 0.05)",
         }}
       >
+        {/* Container da câmera */}
         <div
-          ref={scannerRef}
-          id="leitor-qr-admin"
           style={{
             width: "240px",
             height: "240px",
             margin: "0 auto",
-            background: "#f5f8fa",
+            background: cameraIniciada ? "transparent" : "#f5f8fa",
             borderRadius: "12px",
             boxShadow: "0 2px 12px rgba(0, 116, 178, 0.1)",
             overflow: "hidden",
+            position: "relative",
           }}
-        />
+        >
+          <div
+            ref={scannerRef}
+            id="leitor-qr-admin"
+            style={{
+              width: "100%",
+              height: "100%",
+              position: "relative",
+            }}
+          />
+          
+          {/* Overlay de loading */}
+          {!cameraIniciada && (
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(245, 248, 250, 0.8)",
+              zIndex: 2,
+            }}>
+              <div style={{
+                color: corPrimaria,
+                fontWeight: 600,
+                textAlign: "center",
+              }}>
+                Iniciando câmera...
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Mensagem de status */}
         {lendo && !erro && !resultado && (
@@ -213,7 +306,9 @@ export default function AdminLeitorQR({ onLogout }) {
             fontSize: "16px",
             textAlign: "center",
           }}>
-            Aponte a câmera para o QR Code do funcionário
+            {cameraIniciada 
+              ? "Aponte a câmera para o QR Code do funcionário" 
+              : "Preparando o leitor..."}
           </div>
         )}
 
