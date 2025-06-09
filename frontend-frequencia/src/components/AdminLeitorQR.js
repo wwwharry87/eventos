@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 
-const corPrimaria = "#0479B3";
-const corSucesso = "#38A169";
-const corErro = "#E53E3E";
-const corFundo = "#F7FAFC";
+const COLORS = {
+  primary: "#0479B3",
+  success: "#38A169",
+  error: "#E53E3E",
+  background: "#F7FAFC",
+  text: "#2D3748"
+};
 
 function parseQR(qr) {
   const [qrcode_id, tipo] = (qr || "").split("-");
@@ -12,61 +15,78 @@ function parseQR(qr) {
 }
 
 export default function AdminLeitorQR({ onLogout }) {
-  const scannerRef = useRef();
+  const [status, setStatus] = useState("INICIANDO");
   const [resultado, setResultado] = useState(null);
   const [erro, setErro] = useState("");
-  const [lendo, setLendo] = useState(true);
-  const [cameraIniciada, setCameraIniciada] = useState(false);
   const html5QrcodeRef = useRef(null);
+  const retryCountRef = useRef(0);
+  const scannerRef = useRef(null);
 
-  // Função para reiniciar a leitura
-  const reiniciarLeitura = async () => {
-    setResultado(null);
+  // Estados possíveis: INICIANDO | PRONTO | LENDO | SUCESSO | ERRO | SEM_CAMERA
+
+  // Função robusta para iniciar/reiniciar a câmera
+  const iniciarCamera = async () => {
+    setStatus("INICIANDO");
     setErro("");
-    setLendo(true);
+    setResultado(null);
     
-    if (html5QrcodeRef.current) {
-      try {
-        // Primeiro pare o scanner se estiver rodando
-        if (html5QrcodeRef.current.isScanning) {
-          await html5QrcodeRef.current.stop().catch(stopErr => {
-            console.warn("Erro ao parar scanner:", stopErr);
-          });
-        }
-        
-        // Pequeno delay para garantir que o scanner foi parado
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        // Depois inicie novamente
-        await html5QrcodeRef.current.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 240, height: 240 },
-            aspectRatio: 1,
-          },
-          handleDecodedText,
-          handleScanError
-        );
-        setCameraIniciada(true);
-      } catch (err) {
-        console.error("Erro ao reiniciar scanner:", err);
-        setErro("Erro ao reiniciar scanner. Por favor, recarregue a página.");
-        setCameraIniciada(false);
-        
-        // Tenta novamente após 3 segundos
-        setTimeout(reiniciarLeitura, 3000);
+    try {
+      // Limpar qualquer scanner existente
+      if (html5QrcodeRef.current?.isScanning) {
+        await html5QrcodeRef.current.stop();
       }
+
+      // Criar novo scanner
+      const scanner = new Html5Qrcode("leitor-qr-admin");
+      html5QrcodeRef.current = scanner;
+      retryCountRef.current = 0;
+
+      await scanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 240, height: 240 },
+          aspectRatio: 1,
+          disableFlip: true
+        },
+        handleDecodedText,
+        handleScanError
+      );
+      
+      setStatus("PRONTO");
+    } catch (err) {
+      console.error("Falha ao iniciar câmera:", err);
+      handleCameraError(err);
     }
   };
 
-  // Função para processar o QR Code lido
+  // Tratamento avançado de erros de câmera
+  const handleCameraError = (err) => {
+    retryCountRef.current += 1;
+    
+    if (retryCountRef.current > 3) {
+      setStatus("SEM_CAMERA");
+      setErro("Não foi possível acessar a câmera. Verifique as permissões.");
+      return;
+    }
+
+    // Tentar novamente com delay crescente
+    setTimeout(() => {
+      iniciarCamera();
+    }, retryCountRef.current * 1000);
+  };
+
+  // Processamento do QR Code
   const handleDecodedText = async (decodedText) => {
-    setLendo(false);
+    if (status !== "PRONTO") return;
+    
+    setStatus("LENDO");
     const { qrcode_id, tipo } = parseQR(decodedText);
 
     if (!qrcode_id || !tipo) {
-      setErro("QR Code inválido.");
+      setStatus("ERRO");
+      setErro("QR Code inválido");
+      setTimeout(iniciarCamera, 2000);
       return;
     }
 
@@ -76,375 +96,309 @@ export default function AdminLeitorQR({ onLogout }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ qrcode_id, tipo }),
       });
+
       const data = await res.json();
       
-      if (!res.ok) throw new Error(data.mensagem || "Erro ao registrar frequência.");
-      
-      setResultado({ ...data, tipo });
+      if (!res.ok) throw new Error(data.mensagem || "Erro ao registrar");
       
       // Feedback de sucesso
-      if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
-      beep(900, 120);
+      setResultado({ ...data, tipo });
+      setStatus("SUCESSO");
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      playBeep(900, 120);
       
-      // Reinicia automaticamente após 2 segundos
-      setTimeout(reiniciarLeitura, 2000);
+      // Reinício automático rápido
+      setTimeout(iniciarCamera, 1500);
     } catch (err) {
+      console.error("Erro no registro:", err);
+      setStatus("ERRO");
       setErro(err.message);
-      // Reinicia automaticamente após erro
-      setTimeout(reiniciarLeitura, 3000);
+      setTimeout(iniciarCamera, 2000);
     }
   };
 
-  // Função para lidar com erros de leitura
-  const handleScanError = (errMsg) => {
-    // Ignora erros de "NotFoundException" que são normais durante a leitura
-    if (!errMsg.includes("NotFoundException")) {
-      setErro("Não foi possível acessar a câmera. Tente liberar permissão.");
-      setLendo(false);
-      setCameraIniciada(false);
+  // Ignorar erros normais de leitura
+  const handleScanError = (err) => {
+    if (!err.includes("NotFoundException") && status === "PRONTO") {
+      console.warn("Erro de leitura:", err);
     }
   };
 
-  // Função beep sonoro
-  const beep = (frequency = 700, duration = 140) => {
+  // Beep otimizado para iOS
+  const playBeep = (freq = 700, duration = 120) => {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = ctx.createOscillator();
-      oscillator.type = "sine";
-      oscillator.frequency.value = frequency;
-      oscillator.connect(ctx.destination);
-      oscillator.start();
-      setTimeout(() => {
-        oscillator.stop();
-        ctx.close();
-      }, duration);
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      osc.connect(ctx.destination);
+      osc.start();
+      setTimeout(() => osc.stop(), duration);
     } catch (e) {
-      console.error("Erro no beep:", e);
+      console.warn("Beep não suportado");
     }
   };
 
+  // Gerenciamento de ciclo de vida
   useEffect(() => {
-    const initScanner = async () => {
-      // Delay para garantir que o DOM esteja pronto
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      const scannerElement = document.getElementById('leitor-qr-admin');
-      if (!scannerElement) {
-        setErro("Elemento do scanner não encontrado");
-        return;
-      }
-
-      // Verifica se o elemento está visível
-      const rect = scannerElement.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        setErro("Elemento do scanner não está visível");
-        return;
-      }
-
-      const scanner = new Html5Qrcode("leitor-qr-admin");
-      html5QrcodeRef.current = scanner;
-
-      try {
-        await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 240, height: 240 },
-            aspectRatio: 1,
-          },
-          handleDecodedText,
-          handleScanError
-        );
-        setCameraIniciada(true);
-      } catch (err) {
-        console.error("Erro ao iniciar scanner:", err);
-        setErro("Erro ao iniciar scanner: " + err.message);
-        setCameraIniciada(false);
-        
-        // Tenta novamente após 1 segundo se for um erro de permissão
-        if (err.message.includes("Permission") || err.message.includes("permission")) {
-          setTimeout(initScanner, 1000);
-        }
-      }
-    };
-
-    initScanner();
-
+    iniciarCamera();
+    
     return () => {
-      const cleanup = async () => {
-        if (html5QrcodeRef.current?.isScanning) {
-          try {
-            await html5QrcodeRef.current.stop();
-          } catch (err) {
-            console.warn("Erro na limpeza do scanner:", err);
-          }
-        }
-      };
-      cleanup();
+      if (html5QrcodeRef.current?.isScanning) {
+        html5QrcodeRef.current.stop().catch(() => {});
+      }
     };
   }, []);
 
+  // Renderização otimizada
   return (
-    <div
-      style={{
-        minHeight: "100dvh",
-        background: corFundo,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-        fontFamily: "'Segoe UI', Roboto, sans-serif",
-        position: 'relative',
-      }}
-    >
-      {/* Header moderno */}
-      <header
-        style={{
-          background: `linear-gradient(135deg, ${corPrimaria} 0%, #03679a 100%)`,
-          color: "#fff",
-          width: "100%",
-          padding: "20px 0 16px 0",
-          textAlign: "center",
-          fontWeight: 700,
-          fontSize: "clamp(18px, 4vw, 22px)",
-          position: "relative",
-          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.1)",
-        }}
-      >
+    <div style={styles.container}>
+      {/* Cabeçalho */}
+      <header style={styles.header}>
         Leitor de QR Code — Admin
-        <button
-          onClick={onLogout}
-          style={{
-            position: "absolute",
-            top: "14px",
-            right: "16px",
-            background: "rgba(255, 255, 255, 0.15)",
-            border: "none",
-            color: "#fff",
-            fontSize: "24px",
-            width: "36px",
-            height: "36px",
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "background 0.2s",
-          }}
-          title="Sair"
-          aria-label="Sair"
-        >
+        <button onClick={onLogout} style={styles.logoutButton} aria-label="Sair">
           ⎋
         </button>
       </header>
 
-      {/* Área do scanner */}
-      <div
-        style={{
-          marginTop: "20px",
-          width: "98vw",
-          maxWidth: "400px",
-          minHeight: "360px",
-          borderRadius: "20px",
-          background: "#fff",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "20px",
-          position: "relative",
-          border: "1px solid rgba(0, 0, 0, 0.05)",
-        }}
-      >
+      {/* Área principal */}
+      <div style={styles.scannerArea}>
         {/* Container da câmera */}
-        <div
-          style={{
-            width: "240px",
-            height: "240px",
-            margin: "0 auto",
-            background: cameraIniciada ? "transparent" : "#f5f8fa",
-            borderRadius: "12px",
-            boxShadow: "0 2px 12px rgba(0, 116, 178, 0.1)",
-            overflow: "hidden",
-            position: "relative",
-          }}
-        >
-          <div
-            ref={scannerRef}
+        <div style={styles.cameraContainer}>
+          <div 
             id="leitor-qr-admin"
-            style={{
-              width: "100%",
-              height: "100%",
-              position: "relative",
-            }}
+            ref={scannerRef}
+            style={styles.cameraView}
           />
           
-          {/* Overlay de loading */}
-          {!cameraIniciada && (
-            <div style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(245, 248, 250, 0.8)",
-              zIndex: 2,
-            }}>
-              <div style={{
-                color: corPrimaria,
-                fontWeight: 600,
-                textAlign: "center",
-              }}>
-                Iniciando câmera...
-              </div>
+          {/* Overlay de status */}
+          {status !== "PRONTO" && (
+            <div style={styles.overlay}>
+              {status === "INICIANDO" && (
+                <div style={styles.statusMessage}>
+                  <div style={styles.spinner} />
+                  <p>Iniciando câmera...</p>
+                </div>
+              )}
+              
+              {status === "LENDO" && (
+                <div style={styles.statusMessage}>
+                  <div style={styles.spinner} />
+                  <p>Processando QR Code...</p>
+                </div>
+              )}
+              
+              {status === "SEM_CAMERA" && (
+                <div style={styles.errorMessage}>
+                  <p>❌ Câmera não acessível</p>
+                  <button 
+                    onClick={iniciarCamera}
+                    style={styles.actionButton}
+                  >
+                    Tentar Novamente
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Mensagem de status */}
-        {lendo && !erro && !resultado && (
-          <div style={{ 
-            marginTop: "16px", 
-            color: corPrimaria, 
-            fontWeight: 600,
-            fontSize: "16px",
-            textAlign: "center",
-          }}>
-            {cameraIniciada 
-              ? "Aponte a câmera para o QR Code do funcionário" 
-              : "Preparando o leitor..."}
-          </div>
-        )}
-
-        {/* Mensagem de erro */}
-        {erro && (
-          <div
-            style={{
-              marginTop: "16px",
-              color: corErro,
-              fontWeight: 500,
-              textAlign: "center",
-              background: "rgba(229, 62, 62, 0.05)",
-              padding: "12px",
-              borderRadius: "8px",
-              border: "1px solid rgba(229, 62, 62, 0.1)",
-              width: "100%",
-            }}
-          >
-            {erro}
-            <button
-              style={{
-                marginTop: "12px",
-                background: corPrimaria,
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                padding: "10px 20px",
-                fontWeight: 600,
-                cursor: "pointer",
-                width: "100%",
-                transition: "background 0.2s",
-              }}
-              onClick={() => {
-                if (erro.includes("recarregue")) {
-                  window.location.reload();
-                } else {
-                  reiniciarLeitura();
-                }
-              }}
-            >
-              {erro.includes("recarregue") ? "Recarregar Página" : "Tentar Novamente"}
-            </button>
-          </div>
-        )}
-
-        {/* Resultado da leitura */}
-        {resultado && (
-          <div
-            style={{
-              marginTop: "16px",
-              background: "rgba(56, 161, 105, 0.05)",
-              color: "#114",
-              borderRadius: "12px",
-              padding: "16px",
-              boxShadow: "0 2px 12px rgba(56, 161, 105, 0.1)",
-              textAlign: "center",
-              fontSize: "16px",
-              fontWeight: 500,
-              width: "100%",
-              border: "1px solid rgba(56, 161, 105, 0.1)",
-            }}
-          >
-            {resultado.nome ? (
-              <>
-                <div style={{ 
-                  color: corSucesso,
-                  fontWeight: 600,
-                  marginBottom: "8px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7088 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999" stroke={corSucesso} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M22 4L12 14.01L9 11.01" stroke={corSucesso} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Frequência {resultado.tipo === "entrada" ? "de ENTRADA" : "de SAÍDA"} registrada!
-                </div>
-                <div style={{ 
-                  color: corPrimaria, 
-                  fontWeight: 700, 
-                  margin: "8px 0",
-                  fontSize: "18px",
-                }}>
-                  {resultado.nome}
-                </div>
-                <div style={{ 
-                  fontSize: "14px", 
-                  color: "#718096",
-                  marginBottom: "12px",
-                }}>
-                  {new Date(resultado.data_hora).toLocaleString("pt-BR", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
-                </div>
-                <div style={{
-                  fontSize: "14px",
-                  color: "#718096",
-                  fontStyle: "italic",
-                }}>
-                  Continuando a leitura automaticamente...
-                </div>
-              </>
-            ) : (
-              <div style={{ color: corErro }}>
-                Registro não encontrado
+        {/* Mensagens de status */}
+        <div style={styles.statusContainer}>
+          {status === "PRONTO" && (
+            <p style={styles.readyText}>Aponte para o QR Code do participante</p>
+          )}
+          
+          {status === "SUCESSO" && resultado && (
+            <div style={styles.successBox}>
+              <div style={styles.successHeader}>
+                ✓ {resultado.tipo === "entrada" ? "ENTRADA" : "SAÍDA"} registrada!
               </div>
-            )}
-          </div>
-        )}
+              <div style={styles.userName}>{resultado.nome}</div>
+              <div style={styles.timestamp}>
+                {new Date(resultado.data_hora).toLocaleString("pt-BR")}
+              </div>
+            </div>
+          )}
+          
+          {status === "ERRO" && (
+            <div style={styles.errorBox}>
+              <p>{erro || "Erro desconhecido"}</p>
+              <button 
+                onClick={iniciarCamera}
+                style={styles.actionButton}
+              >
+                Tentar Novamente
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Rodapé minimalista */}
-      <footer
-        style={{
-          textAlign: "center",
-          fontSize: "12px",
-          color: "#A0AEC0",
-          padding: "16px",
-          marginTop: "auto",
-          width: "100%",
-        }}
-      >
+      {/* Rodapé */}
+      <footer style={styles.footer}>
         © {new Date().getFullYear()} Prefeitura de Marabá — Educacenso
       </footer>
     </div>
   );
 }
+
+// Estilos otimizados
+const styles = {
+  container: {
+    minHeight: "100dvh",
+    background: COLORS.background,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    paddingTop: "env(safe-area-inset-top)",
+    paddingBottom: "env(safe-area-inset-bottom)",
+    fontFamily: "'Segoe UI', Roboto, sans-serif",
+  },
+  header: {
+    background: `linear-gradient(135deg, ${COLORS.primary} 0%, #03679a 100%)`,
+    color: "#fff",
+    width: "100%",
+    padding: "20px 0",
+    textAlign: "center",
+    fontWeight: 700,
+    fontSize: "clamp(18px, 4vw, 22px)",
+    position: "relative",
+    boxShadow: "0 2px 10px rgba(0, 0, 0, 0.1)",
+  },
+  logoutButton: {
+    position: "absolute",
+    top: "14px",
+    right: "16px",
+    background: "rgba(255, 255, 255, 0.15)",
+    border: "none",
+    color: "#fff",
+    fontSize: "24px",
+    width: "36px",
+    height: "36px",
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+  },
+  scannerArea: {
+    marginTop: "20px",
+    width: "98vw",
+    maxWidth: "400px",
+    minHeight: "360px",
+    borderRadius: "20px",
+    background: "#fff",
+    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "20px",
+    position: "relative",
+  },
+  cameraContainer: {
+    width: "240px",
+    height: "240px",
+    margin: "0 auto",
+    borderRadius: "12px",
+    overflow: "hidden",
+    position: "relative",
+    boxShadow: "0 2px 12px rgba(0, 116, 178, 0.1)",
+  },
+  cameraView: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(255, 255, 255, 0.9)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "column",
+  },
+  statusMessage: {
+    textAlign: "center",
+    color: COLORS.primary,
+    fontWeight: 600,
+  },
+  errorMessage: {
+    textAlign: "center",
+    color: COLORS.error,
+  },
+  spinner: {
+    border: `4px solid ${COLORS.primary}20`,
+    borderTop: `4px solid ${COLORS.primary}`,
+    borderRadius: "50%",
+    width: "40px",
+    height: "40px",
+    animation: "spin 1s linear infinite",
+    margin: "0 auto 16px",
+  },
+  statusContainer: {
+    marginTop: "20px",
+    width: "100%",
+    textAlign: "center",
+  },
+  readyText: {
+    color: COLORS.primary,
+    fontWeight: 600,
+  },
+  successBox: {
+    background: `${COLORS.success}10`,
+    border: `1px solid ${COLORS.success}30`,
+    borderRadius: "12px",
+    padding: "16px",
+    color: COLORS.text,
+  },
+  successHeader: {
+    color: COLORS.success,
+    fontWeight: 700,
+    marginBottom: "8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+  },
+  userName: {
+    color: COLORS.primary,
+    fontWeight: 700,
+    fontSize: "18px",
+    margin: "8px 0",
+  },
+  timestamp: {
+    color: "#718096",
+    fontSize: "14px",
+  },
+  errorBox: {
+    background: `${COLORS.error}10`,
+    border: `1px solid ${COLORS.error}30`,
+    borderRadius: "12px",
+    padding: "16px",
+    color: COLORS.error,
+  },
+  actionButton: {
+    background: COLORS.primary,
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px 20px",
+    fontWeight: 600,
+    cursor: "pointer",
+    width: "100%",
+    marginTop: "12px",
+  },
+  footer: {
+    textAlign: "center",
+    fontSize: "12px",
+    color: "#A0AEC0",
+    padding: "16px",
+    marginTop: "auto",
+    width: "100%",
+  },
+};
