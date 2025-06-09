@@ -5,33 +5,28 @@ import AdminLogin from "./components/AdminLogin";
 import AdminLeitorQR from "./components/AdminLeitorQR";
 
 export default function App() {
-  // Estados principais
   const [pagina, setPagina] = useState("login");
   const [funcionario, setFuncionario] = useState(null);
 
-  // Login de funcionário comum
   const handleFuncionarioLogin = (dadosFuncionario) => {
+    console.log("Dados do funcionário:", dadosFuncionario); // Adicionado para debug
     setFuncionario(dadosFuncionario);
     setPagina("carrossel");
   };
 
-  // Logout geral
   const handleLogout = () => {
     setFuncionario(null);
     setPagina("login");
   };
 
-  // Login admin
   const handleAdminLogin = () => {
     setPagina("admin");
   };
 
-  // Logout admin
   const handleAdminLogout = () => {
     setPagina("login");
   };
 
-  // Renderização condicional por página
   switch (pagina) {
     case "login":
       return (
