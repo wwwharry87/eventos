@@ -9,7 +9,6 @@ import { Pagination } from "swiper/modules";
 const corPrimaria = "#0479B3";
 const corSecundaria = "#FFD600";
 
-// beep
 function beep(frequency = 600, duration = 120) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -26,6 +25,20 @@ function beep(frequency = 600, duration = 120) {
 }
 
 export default function CarrosselFrequencia({ funcionario, onLogout }) {
+  // Protege contra objeto inválido:
+  if (!funcionario || !funcionario.qrcode_id) {
+    return (
+      <div style={{
+        textAlign: 'center',
+        marginTop: 100,
+        color: '#d32f2f'
+      }}>
+        Erro ao carregar dados do funcionário.<br />
+        Tente refazer o login.
+      </div>
+    );
+  }
+
   const [presencaConfirmada, setPresencaConfirmada] = useState(false);
   const [swiperReady, setSwiperReady] = useState(false);
   const swiperRef = useRef(null);
@@ -35,13 +48,15 @@ export default function CarrosselFrequencia({ funcionario, onLogout }) {
   useEffect(() => {
     if (presencaConfirmada) return;
     const interval = setInterval(async () => {
-      const res = await fetch(
-        `https://eventos-wi35.onrender.com/api/checar-frequencia?cpf=${funcionario.cpf}&tipo=entrada`
-      );
-      const data = await res.json();
-      if (data.confirmada) {
-        setPresencaConfirmada(true);
-      }
+      try {
+        const res = await fetch(
+          `https://eventos-wi35.onrender.com/api/checar-frequencia?cpf=${funcionario.cpf}&tipo=entrada`
+        );
+        const data = await res.json();
+        if (data.confirmada) {
+          setPresencaConfirmada(true);
+        }
+      } catch (err) { }
     }, 2000);
     return () => clearInterval(interval);
   }, [funcionario.cpf, presencaConfirmada]);
