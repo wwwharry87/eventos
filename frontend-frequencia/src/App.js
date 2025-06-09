@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import LoginForm from "./components/LoginForm";
-import TelaQRCodeEntrada from "./components/TelaQRCodeEntrada";
+import CarrosselFrequencia from "./components/CarrosselFrequencia"; // NOVO
 import AdminLogin from "./components/AdminLogin";
 import AdminLeitorQR from "./components/AdminLeitorQR";
 
@@ -72,7 +72,7 @@ function App() {
       />
     );
 
-  // Renderiza tela de funcionário (login ou QR)
+  // Renderiza tela de funcionário (login ou fluxo do evento)
   return (
     <div style={{ minHeight: "100vh", background: "#f5f6fa", position: "relative" }}>
       {!funcionario ? (
@@ -97,7 +97,7 @@ function App() {
           </button>
         </>
       ) : (
-        <TelaQRCodeEntrada funcionario={funcionario} onLogout={handleLogout} />
+        <CarrosselFrequencia funcionario={funcionario} onLogout={handleLogout} />
       )}
     </div>
   );
