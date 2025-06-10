@@ -50,7 +50,7 @@ export default function AdminLeitorQR({ onLogout }) {
 
     const html5QrcodeScanner = new Html5QrcodeScanner(
       "reader",
-      { fps: 12, qrbox: 230, disableFlip: false },
+      { fps: 12, qrbox: { width: 250, height: 250 }, disableFlip: false, facingMode: { exact: "environment" } }, // Ajustado qrbox para objeto e adicionado facingMode
       false
     );
     scannerRef.current = html5QrcodeScanner;
@@ -204,9 +204,10 @@ export default function AdminLeitorQR({ onLogout }) {
       <div
         id="reader"
         style={{
-          width: 250,
-          height: 250,
-          borderRadius: "50%",
+          width: "90%", // Alterado para largura flexível
+          maxWidth: 400, // Adicionado largura máxima
+          height: 300, // Aumentado a altura para melhor visualização
+          // borderRadius: "50%", // Removido para visualização retangular
           background: "#f2f7fa",
           boxShadow: "0 2px 16px #0479b333",
           display: "flex",
@@ -258,3 +259,4 @@ export default function AdminLeitorQR({ onLogout }) {
     </div>
   );
 }
+
