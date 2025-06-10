@@ -2,9 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { FaSignOutAlt } from "react-icons/fa";
 
-// Função para tocar um beep
-function playBeep(frequency = 900, duration = 100) {
-  if (window.AudioContext || window.webkitAudioContext) {
+function playBeep(frequency = 1100, duration = 100) {
+  try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const o = ctx.createOscillator();
     const g = ctx.createGain();
@@ -13,15 +12,15 @@ function playBeep(frequency = 900, duration = 100) {
     g.connect(ctx.destination);
     o.frequency.value = frequency;
     o.start();
-    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    g.gain.setValueAtTime(0.17, ctx.currentTime);
     setTimeout(() => {
       o.stop();
       ctx.close();
     }, duration);
-  }
+  } catch (err) {}
 }
 
-// Função utilitária para parsear o QR code (espera formato: qrcode_id-tipo)
+// Utilitário para parsear o QR
 function parseQR(text) {
   if (!text) return { qrcode_id: null, tipo: null };
   const match = text.match(/^(\d{11,14})(?:-(entrada|saida|saída))?$/i);
@@ -31,17 +30,15 @@ function parseQR(text) {
       tipo: match[2] ? match[2].toLowerCase() : "entrada",
     };
   }
-  // Se não bater o padrão, tenta só CPF
   return { qrcode_id: text.replace(/\D/g, ""), tipo: "entrada" };
 }
 
 export default function AdminLeitorQR({ onLogout }) {
-  const [status, setStatus] = useState("PRONTO"); // PRONTO, LENDO, SUCESSO, ERRO
+  const [status, setStatus] = useState("PRONTO");
   const [erro, setErro] = useState(null);
   const [resultado, setResultado] = useState(null);
   const scannerRef = useRef();
 
-  // Reinicia o scanner
   function iniciarCamera() {
     setErro(null);
     setResultado(null);
@@ -53,7 +50,7 @@ export default function AdminLeitorQR({ onLogout }) {
 
     const html5QrcodeScanner = new Html5QrcodeScanner(
       "reader",
-      { fps: 12, qrbox: 220, disableFlip: false },
+      { fps: 12, qrbox: 230, disableFlip: false },
       false
     );
     scannerRef.current = html5QrcodeScanner;
@@ -62,9 +59,7 @@ export default function AdminLeitorQR({ onLogout }) {
       async (decodedText) => {
         await handleDecodedText(decodedText);
       },
-      (err) => {
-        // Falha de leitura (normal, não precisa alertar sempre)
-      }
+      (err) => {}
     );
   }
 
@@ -78,21 +73,18 @@ export default function AdminLeitorQR({ onLogout }) {
     // eslint-disable-next-line
   }, []);
 
-  // Lógica ao ler QR
   async function handleDecodedText(decodedText) {
     if (status !== "PRONTO" && status !== "LENDO") return;
-
     setStatus("LENDO");
     const { qrcode_id, tipo } = parseQR(decodedText);
 
     if (!qrcode_id) {
       setStatus("ERRO");
-      setErro("QR Code inválido: ID não encontrado");
-      setTimeout(() => iniciarCamera(), 1500);
+      setErro("QR Code inválido: ID não encontrado.");
+      setTimeout(() => iniciarCamera(), 1400);
       return;
     }
 
-    // Validar tipo
     const tiposValidos = ["entrada", "saida", "saída"];
     const tipoFinal = tipo && tiposValidos.includes(tipo) ? tipo : "entrada";
 
@@ -108,64 +100,80 @@ export default function AdminLeitorQR({ onLogout }) {
       if (!res.ok) {
         setStatus("ERRO");
         setErro(data.mensagem || `Erro ${res.status} ao registrar`);
-        setTimeout(() => iniciarCamera(), 1800);
+        setTimeout(() => iniciarCamera(), 1700);
         return;
       }
 
       setResultado({ ...data, tipo: tipoFinal });
       setStatus("SUCESSO");
-      if (navigator.vibrate) navigator.vibrate([100, 30, 80]);
-      playBeep(900, 120);
+      if (navigator.vibrate) navigator.vibrate([110, 30, 70]);
+      playBeep(1200, 120);
 
-      setTimeout(() => iniciarCamera(), 1600);
-
+      setTimeout(() => iniciarCamera(), 1200);
     } catch (err) {
       setStatus("ERRO");
       setErro("Erro de rede: " + err.message);
-      setTimeout(() => iniciarCamera(), 2000);
+      setTimeout(() => iniciarCamera(), 1800);
     }
   }
 
-  // Exibição do resultado
   function renderResultado() {
     if (!resultado) return null;
     return (
       <div style={{
-        background: "#e6f8ec",
+        background: "#e5f8ec",
         border: "2px solid #36b37e",
         borderRadius: "16px",
-        padding: "20px",
-        margin: "10px auto 0",
-        maxWidth: 340,
+        padding: "14px 0 10px",
+        margin: "16px auto 0",
+        width: 265,
         textAlign: "center",
-        color: "#195e36"
+        color: "#195e36",
+        fontWeight: 600
       }}>
-        <strong>{resultado.tipo === "saida" || resultado.tipo === "saída" ? "Saída registrada!" : "Entrada registrada!"}</strong>
-        <div style={{fontSize: 18, margin: "8px 0 4px"}}>
+        <div style={{ fontSize: 16, marginBottom: 2 }}>
+          {resultado.tipo === "saida" || resultado.tipo === "saída"
+            ? "Saída registrada!"
+            : "Entrada registrada!"}
+        </div>
+        <div style={{ fontSize: 17, margin: "5px 0 0" }}>
           {resultado.nome}
         </div>
-        <div style={{fontSize: 15, opacity: 0.7}}>{resultado.data_hora && new Date(resultado.data_hora).toLocaleString("pt-BR", { hour12: false })}</div>
+        <div style={{ fontSize: 13, opacity: 0.67 }}>
+          {resultado.data_hora && new Date(resultado.data_hora).toLocaleString("pt-BR", { hour12: false })}
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      width: "100vw",
-      background: "linear-gradient(135deg,#e3f2fd 50%,#f0fff3 100%)",
-      display: "flex",
-      flexDirection: "column"
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        width: "100vw",
+        background: "#fff",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center"
+      }}
+    >
       <header style={{
+        width: "100%",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: 16,
-        background: "rgba(4,121,179,0.12)"
+        padding: 12,
+        background: "rgba(4,121,179,0.13)",
+        boxSizing: "border-box"
       }}>
-        <div style={{ fontWeight: "bold", fontSize: 18, color: "#0479b3", letterSpacing: 1 }}>
-          Admin Frequência
+        <div style={{
+          fontWeight: "bold",
+          fontSize: 19,
+          color: "#0479b3",
+          letterSpacing: 1.2,
+          marginLeft: 6
+        }}>
+          Frequência - ADMIN
         </div>
         <button
           onClick={onLogout}
@@ -175,69 +183,78 @@ export default function AdminLeitorQR({ onLogout }) {
             color: "#0479b3",
             fontSize: 26,
             cursor: "pointer",
-            padding: 6,
+            padding: 7,
+            marginRight: 3
           }}
           title="Sair"
         >
           <FaSignOutAlt />
         </button>
       </header>
-      <main style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "start",
-        padding: "14px 0"
+
+      <div style={{
+        fontWeight: 600,
+        fontSize: 21,
+        color: "#222",
+        margin: "22px 0 16px"
       }}>
-        <div style={{ fontWeight: 600, fontSize: 22, color: "#222", margin: "8px 0 18px" }}>
-          Leitura do QR Code
+        Leitor de QR Code
+      </div>
+
+      <div
+        id="reader"
+        style={{
+          width: 250,
+          height: 250,
+          borderRadius: "50%",
+          background: "#f2f7fa",
+          boxShadow: "0 2px 16px #0479b333",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+          marginBottom: 17
+        }}
+      ></div>
+
+      {status === "SUCESSO" && renderResultado()}
+
+      {erro && (
+        <div style={{
+          color: "#b3261e",
+          background: "#fff6f4",
+          border: "1.5px solid #fce5e3",
+          borderRadius: 12,
+          padding: "13px 15px",
+          marginTop: 12,
+          fontWeight: 500,
+          width: 265,
+          textAlign: "center"
+        }}>
+          {erro}
         </div>
-        <div id="reader" style={{
-          width: 260,
-          height: 260,
-          borderRadius: 18,
-          background: "#fff",
-          boxShadow: "0 3px 18px #0479b330",
-          overflow: "hidden"
-        }}></div>
+      )}
 
-        {status === "SUCESSO" && renderResultado()}
-
-        {erro && (
-          <div style={{
-            color: "#b3261e",
-            background: "#fff6f4",
-            border: "1.5px solid #fce5e3",
-            borderRadius: 12,
-            padding: "13px 15px",
-            marginTop: 15,
-            fontWeight: 500,
-            maxWidth: 340
-          }}>
-            {erro}
-          </div>
-        )}
-
-        {status === "PRONTO" && (
-          <div style={{
-            color: "#888",
-            marginTop: 14,
-            fontSize: 15
-          }}>
-            Aponte a câmera para o QR Code do servidor.
-          </div>
-        )}
-        {status === "LENDO" && (
-          <div style={{
-            color: "#0479b3",
-            marginTop: 14,
-            fontSize: 16
-          }}>
-            Lendo QR Code...
-          </div>
-        )}
-      </main>
+      {status === "PRONTO" && (
+        <div style={{
+          color: "#0479b3",
+          marginTop: 10,
+          fontSize: 15,
+          textAlign: "center"
+        }}>
+          Aponte a câmera para o QR Code do funcionário.<br />
+          O registro aparecerá automaticamente!
+        </div>
+      )}
+      {status === "LENDO" && (
+        <div style={{
+          color: "#0479b3",
+          marginTop: 11,
+          fontSize: 16
+        }}>
+          Lendo QR Code...
+        </div>
+      )}
     </div>
   );
 }
