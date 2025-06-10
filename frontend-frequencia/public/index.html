@@ -13,6 +13,18 @@
     <meta name="apple-mobile-web-app-title" content="Leitor QR">
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash.png">
+
+
+    <meta http-equiv="Content-Security-Policy" content="
+  default-src 'self' https://eventos-wi35.onrender.com;
+  script-src 'self' 'unsafe-eval' 'unsafe-inline';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob:;
+  connect-src 'self' https://eventos-wi35.onrender.com;
+  media-src 'self' blob:;
+  font-src 'self';
+">
+
     
     <!-- Configurações PWA -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
@@ -20,10 +32,20 @@
     <!-- Segurança para APIs de câmera -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://eventos-wi35.onrender.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self' https://eventos-wi35.onrender.com; frame-src 'self'">
     
-    <title>Leitor QR - Prefeitura de Marabá</title>
+    <title>Frequencia com Leitor QR</title>
   </head>
   <body>
     <noscript>Você precisa habilitar JavaScript para executar este aplicativo.</noscript>
     <div id="root"></div>
   </body>
+  <script>
+    window.addEventListener('load', () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(reg => console.log('SW registered:', reg))
+          .catch(err => console.error('SW registration failed:', err));
+      }
+      console.log('DOM fully loaded');
+    });
+  </script>
 </html>

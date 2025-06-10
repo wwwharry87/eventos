@@ -1,9 +1,21 @@
 /* eslint-disable no-restricted-globals, no-undef */
+const APP_VERSION = '2.0.1'; // ATUALIZE SEMPRE QUE FIZER DEPLOY
+const CACHE_NAME = `app-cache-${APP_VERSION}`;
+const DYNAMIC_CACHE_NAME = `dynamic-cache-${APP_VERSION}`;
 
-// Esta linha será substituída pela lista de arquivos pré-cache durante a build
-const WB_MANIFEST = self.__WB_MANIFEST || [];
-const CACHE_NAME = 'leitor-qr-v4';
-const DYNAMIC_CACHE_NAME = 'leitor-qr-dynamic-v1';
+self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Forçar ativação imediata
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll([
+        '/',
+        '/index.html',
+        '/static/js/main.chunk.js',
+        '/static/css/main.chunk.css',
+        '/manifest.json'
+      ]))
+  );
+});
 
 // Instalação - Pré-cache dos assets
 self.addEventListener('install', (event) => {
