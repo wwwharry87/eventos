@@ -12,15 +12,16 @@ const COLORS = {
 function parseQR(qr) {
   if (!qr) return { qrcode_id: null, tipo: null };
   
-  // Suporte para múltiplos formatos de QR Code
-  const parts = qr.split("-");
-  if (parts.length >= 2) {
-    return { 
-      qrcode_id: parts.slice(0, -1).join("-"), // Pega tudo exceto o último elemento como ID
-      tipo: parts[parts.length - 1] // Último elemento como tipo
+  // Melhor tratamento para diferentes formatos
+  if (qr.includes("-")) {
+    const lastDashIndex = qr.lastIndexOf("-");
+    return {
+      qrcode_id: qr.substring(0, lastDashIndex),
+      tipo: qr.substring(lastDashIndex + 1)
     };
   }
-  return { qrcode_id: qr, tipo: "entrada" }; // Fallback para QR codes antigos
+  
+  return { qrcode_id: qr, tipo: "entrada" };
 }
 
 export default function AdminLeitorQR({ onLogout }) {
@@ -30,8 +31,6 @@ export default function AdminLeitorQR({ onLogout }) {
   const html5QrcodeRef = useRef(null);
   const retryCountRef = useRef(0);
   const scannerRef = useRef(null);
-
-  // Estados possíveis: INICIANDO | PRONTO | LENDO | SUCESSO | ERRO | SEM_CAMERA
 
   // Função robusta para iniciar/reiniciar a câmera
   const iniciarCamera = async () => {
@@ -54,9 +53,9 @@ export default function AdminLeitorQR({ onLogout }) {
         { facingMode: "environment" },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 }, // Área de leitura ligeiramente maior
-          aspectRatio: 1,
-          disableFlip: false // Permitir flip para melhor leitura
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.333, // Proporção 4:3 mais comum
+          disableFlip: false
         },
         handleDecodedText,
         handleScanError
@@ -71,11 +70,18 @@ export default function AdminLeitorQR({ onLogout }) {
 
   // Tratamento avançado de erros de câmera
   const handleCameraError = (err) => {
+    // Verificar permissão negada especificamente
+    if (err.name === 'NotAllowedError') {
+      setStatus("SEM_CAMERA");
+      setErro("Permissão de câmera negada. Habilite nas configurações.");
+      return;
+    }
+    
     retryCountRef.current += 1;
     
     if (retryCountRef.current > 3) {
       setStatus("SEM_CAMERA");
-      setErro("Não foi possível acessar a câmera. Verifique as permissões.");
+      setErro("Não foi possível acessar a câmera.");
       return;
     }
 
@@ -85,19 +91,20 @@ export default function AdminLeitorQR({ onLogout }) {
     }, retryCountRef.current * 1000);
   };
 
-  // Processamento do QR Code com validação melhorada
+  // Processamento do QR Code com sanitização
   const handleDecodedText = async (decodedText) => {
     if (status !== "PRONTO" && status !== "LENDO") return;
     
-    // Evitar múltiplas leituras simultâneas
     setStatus("LENDO");
     
-    const { qrcode_id, tipo } = parseQR(decodedText);
+    // Sanitizar texto do QR code
+    const cleanText = decodedText.trim().replace(/[^\w\-]/g, '');
+    const { qrcode_id, tipo } = parseQR(cleanText);
 
     if (!qrcode_id) {
       setStatus("ERRO");
       setErro("QR Code inválido: ID não encontrado");
-      setTimeout(iniciarCamera, 2000);
+      setTimeout(() => iniciarCamera(), 3000);
       return;
     }
 
@@ -108,7 +115,7 @@ export default function AdminLeitorQR({ onLogout }) {
     if (tipo && !tiposValidos.includes(tipoNormalizado)) {
       setStatus("ERRO");
       setErro(`Tipo de QR Code inválido: ${tipo}`);
-      setTimeout(iniciarCamera, 2000);
+      setTimeout(() => iniciarCamera(), 3000);
       return;
     }
 
@@ -136,20 +143,22 @@ export default function AdminLeitorQR({ onLogout }) {
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       playBeep(900, 120);
       
-      // Reinício automático rápido
+      // Reinício automático
       setTimeout(iniciarCamera, 1500);
     } catch (err) {
       console.error("Erro no registro:", err);
       setStatus("ERRO");
       setErro(err.message);
-      setTimeout(iniciarCamera, 2000);
+      setTimeout(() => iniciarCamera(), 3000);
     }
   };
 
-  // Ignorar erros normais de leitura
+  // Tratamento detalhado de erros de leitura
   const handleScanError = (err) => {
+    console.warn("Erro de leitura:", err);
     if (!err.includes("NotFoundException") && status === "PRONTO") {
-      console.warn("Erro de leitura:", err);
+      setErro("Falha na leitura: " + err);
+      setTimeout(() => setErro(""), 3000);
     }
   };
 
@@ -326,8 +335,9 @@ const styles = {
     position: "relative",
   },
   cameraContainer: {
-    width: "240px",
-    height: "240px",
+    width: "100%", // Ocupa toda largura disponível
+    maxWidth: "300px",
+    height: "300px", // Altura fixa
     margin: "0 auto",
     borderRadius: "12px",
     overflow: "hidden",
@@ -442,4 +452,3 @@ styleSheet.innerText = `
   }
 `;
 document.head.appendChild(styleSheet);
-
