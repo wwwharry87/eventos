@@ -1,58 +1,24 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LoginForm from "./components/LoginForm";
 import CarrosselFrequencia from "./components/CarrosselFrequencia";
 import AdminLogin from "./components/AdminLogin";
 import AdminLeitorQR from "./components/AdminLeitorQR";
 
- export default function App() {
-    const [pagina, setPagina] = useState("login");
-    const [funcionario, setFuncionario] = useState(null);
-    const [error, setError] = useState(null);
-  
-    // Adicione este useEffect para capturar erros globais
-    useEffect(() => {
-      const errorHandler = (error) => {
-        console.error('Erro capturado:', error);
-        setError('Ocorreu um erro inesperado');
-      };
-      
-      window.addEventListener('error', errorHandler);
-      return () => window.removeEventListener('error', errorHandler);
-    }, []);
-  
-    if (error) {
-      return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          padding: '20px',
-          textAlign: 'center'
-        }}>
-          <h2 style={{color: '#E53E3E'}}>Erro</h2>
-          <p>{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            style={{
-              padding: '10px 20px',
-              background: '#0479B3',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              marginTop: '20px'
-            }}
-          >
-            Recarregar Aplicativo
-          </button>
-        </div>
-      );
-    }
-  
-  }
+export default function App() {
+  const [pagina, setPagina] = useState("login");
+  const [funcionario, setFuncionario] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const errorHandler = (error) => {
+      console.error('Erro capturado:', error);
+      setError('Ocorreu um erro inesperado');
+    };
+    window.addEventListener('error', errorHandler);
+    return () => window.removeEventListener('error', errorHandler);
+  }, []);
+
   const handleFuncionarioLogin = (dadosFuncionario) => {
-    console.log("Dados do funcionário:", dadosFuncionario); // Adicionado para debug
     setFuncionario(dadosFuncionario);
     setPagina("carrossel");
   };
@@ -69,6 +35,36 @@ import AdminLeitorQR from "./components/AdminLeitorQR";
   const handleAdminLogout = () => {
     setPagina("login");
   };
+
+  if (error) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        padding: '20px',
+        textAlign: 'center'
+      }}>
+        <h2 style={{color: '#E53E3E'}}>Erro</h2>
+        <p>{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          style={{
+            padding: '10px 20px',
+            background: '#0479B3',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            marginTop: '20px'
+          }}
+        >
+          Recarregar Aplicativo
+        </button>
+      </div>
+    );
+  }
 
   switch (pagina) {
     case "login":
@@ -97,3 +93,4 @@ import AdminLeitorQR from "./components/AdminLeitorQR";
     default:
       return <div>Algo deu errado. Tente novamente.</div>;
   }
+}
