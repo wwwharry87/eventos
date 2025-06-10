@@ -10,8 +10,17 @@ const COLORS = {
 };
 
 function parseQR(qr) {
-  const [qrcode_id, tipo] = (qr || "").split("-");
-  return { qrcode_id, tipo };
+  if (!qr) return { qrcode_id: null, tipo: null };
+  
+  // Suporte para múltiplos formatos de QR Code
+  const parts = qr.split("-");
+  if (parts.length >= 2) {
+    return { 
+      qrcode_id: parts.slice(0, -1).join("-"), // Pega tudo exceto o último elemento como ID
+      tipo: parts[parts.length - 1] // Último elemento como tipo
+    };
+  }
+  return { qrcode_id: qr, tipo: "entrada" }; // Fallback para QR codes antigos
 }
 
 export default function AdminLeitorQR({ onLogout }) {
@@ -36,7 +45,7 @@ export default function AdminLeitorQR({ onLogout }) {
         await html5QrcodeRef.current.stop();
       }
 
-      // Criar novo scanner
+      // Criar novo scanner com configurações otimizadas
       const scanner = new Html5Qrcode("leitor-qr-admin");
       html5QrcodeRef.current = scanner;
       retryCountRef.current = 0;
@@ -45,9 +54,9 @@ export default function AdminLeitorQR({ onLogout }) {
         { facingMode: "environment" },
         {
           fps: 10,
-          qrbox: { width: 240, height: 240 },
+          qrbox: { width: 250, height: 250 }, // Área de leitura ligeiramente maior
           aspectRatio: 1,
-          disableFlip: true
+          disableFlip: false // Permitir flip para melhor leitura
         },
         handleDecodedText,
         handleScanError
@@ -76,16 +85,29 @@ export default function AdminLeitorQR({ onLogout }) {
     }, retryCountRef.current * 1000);
   };
 
-  // Processamento do QR Code
+  // Processamento do QR Code com validação melhorada
   const handleDecodedText = async (decodedText) => {
-    if (status !== "PRONTO") return;
+    if (status !== "PRONTO" && status !== "LENDO") return;
     
+    // Evitar múltiplas leituras simultâneas
     setStatus("LENDO");
+    
     const { qrcode_id, tipo } = parseQR(decodedText);
 
-    if (!qrcode_id || !tipo) {
+    if (!qrcode_id) {
       setStatus("ERRO");
-      setErro("QR Code inválido");
+      setErro("QR Code inválido: ID não encontrado");
+      setTimeout(iniciarCamera, 2000);
+      return;
+    }
+
+    // Valores válidos para tipo
+    const tiposValidos = ["entrada", "saida", "saída"];
+    const tipoNormalizado = tipo ? tipo.toLowerCase() : "entrada";
+    
+    if (tipo && !tiposValidos.includes(tipoNormalizado)) {
+      setStatus("ERRO");
+      setErro(`Tipo de QR Code inválido: ${tipo}`);
       setTimeout(iniciarCamera, 2000);
       return;
     }
@@ -94,16 +116,23 @@ export default function AdminLeitorQR({ onLogout }) {
       const res = await fetch("https://eventos-wi35.onrender.com/api/frequencia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qrcode_id, tipo }),
+        body: JSON.stringify({ 
+          qrcode_id, 
+          tipo: tipoNormalizado 
+        }),
       });
 
       const data = await res.json();
       
-      if (!res.ok) throw new Error(data.mensagem || "Erro ao registrar");
+      if (!res.ok) {
+        throw new Error(data.mensagem || `Erro ${res.status} ao registrar`);
+      }
       
       // Feedback de sucesso
-      setResultado({ ...data, tipo });
+      setResultado({ ...data, tipo: tipoNormalizado });
       setStatus("SUCESSO");
+      
+      // Feedback tátil e sonoro
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       playBeep(900, 120);
       
@@ -243,7 +272,7 @@ export default function AdminLeitorQR({ onLogout }) {
   );
 }
 
-// Estilos otimizados
+// Estilos otimizados (mantidos iguais)
 const styles = {
   container: {
     minHeight: "100dvh",
