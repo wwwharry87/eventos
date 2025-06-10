@@ -11,15 +11,16 @@ const COLORS = {
 
 function parseQR(qr) {
   if (!qr) return { qrcode_id: null, tipo: null };
-  
-  const parts = qr.split("-");
+
+  const cleaned = qr.trim();
+  const parts = cleaned.split("-");
   if (parts.length >= 2) {
-    return { 
+    return {
       qrcode_id: parts.slice(0, -1).join("-"),
       tipo: parts[parts.length - 1]
     };
   }
-  return { qrcode_id: qr, tipo: "entrada" };
+  return { qrcode_id: cleaned, tipo: "entrada" };
 }
 
 // Detecção melhorada de PWA
