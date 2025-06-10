@@ -1,89 +1,68 @@
-/* eslint-disable no-restricted-globals */
+/* eslint-disable no-restricted-globals, no-undef */
 
-const CACHE_NAME = 'leitor-qr-v3'; // Atualizei a versão
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/static/js/main.chunk.js',
-  '/static/js/2.chunk.js',
-  '/static/js/bundle.js',
-  '/static/css/main.chunk.css',
-  '/manifest.json',
-  '/favicon.ico',
-  '/logo192.png',
-  '/logo512.png',
-  '/assets/'
-];
+// Esta linha será substituída pela lista de arquivos pré-cache durante a build
+const WB_MANIFEST = self.__WB_MANIFEST || [];
+const CACHE_NAME = 'leitor-qr-v4';
+const DYNAMIC_CACHE_NAME = 'leitor-qr-dynamic-v1';
 
-// Instalação do Service Worker
+// Instalação - Pré-cache dos assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Cache aberto');
-        return cache.addAll(urlsToCache);
+        console.log('[Service Worker] Pré-caching de assets');
+        const cacheUrls = WB_MANIFEST.map((entry) => entry.url);
+        return cache.addAll(cacheUrls);
       })
-      .catch((err) => {
-        console.error('Falha ao armazenar em cache:', err);
-      })
+      .then(() => self.skipWaiting())
   );
 });
 
-// Estratégia de cache: Cache-first, falling back to network
+// Estratégia de cache: Stale-While-Revalidate
 self.addEventListener('fetch', (event) => {
-  // Ignorar requisições que não são GET
-  if (event.request.method !== 'GET') return;
-  
-  // Ignorar requisições de chrome-extension
-  if (event.request.url.includes('chrome-extension://')) return;
-  
+  // Ignorar requisições não-GET e URLs especiais
+  if (
+    event.request.method !== 'GET' ||
+    event.request.url.includes('chrome-extension://') ||
+    event.request.url.includes('sockjs-node')
+  ) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then((cachedResponse) => {
-        // Retornar resposta em cache se existir
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        
-        // Buscar na rede como fallback
-        return fetch(event.request)
-          .then((response) => {
-            // Não cachear respostas inválidas
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-            
-            // Clonar a resposta para armazenar em cache
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-            
-            return response;
+    caches.match(event.request).then((cachedResponse) => {
+      // Sempre buscar na rede para atualizar o cache
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        // Atualizar cache apenas para respostas válidas
+        if (networkResponse.ok) {
+          const clone = networkResponse.clone();
+          caches.open(DYNAMIC_CACHE_NAME).then((cache) => {
+            cache.put(event.request, clone);
           });
-      })
+        }
+        return networkResponse;
+      });
+
+      // Retornar cache se existir, enquanto busca na rede
+      return cachedResponse || fetchPromise;
+    })
   );
 });
 
 // Limpeza de caches antigos
 self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
+  const cacheWhitelist = [CACHE_NAME, DYNAMIC_CACHE_NAME];
   
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (!cacheWhitelist.includes(cacheName)) {
-            console.log('Removendo cache antigo:', cacheName);
+            console.log('[Service Worker] Removendo cache antigo:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    })
-    .then(() => {
-      // Forçar controle sobre todas as páginas imediatamente
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
