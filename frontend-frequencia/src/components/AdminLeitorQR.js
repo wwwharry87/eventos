@@ -12,16 +12,15 @@ const COLORS = {
 function parseQR(qr) {
   if (!qr) return { qrcode_id: null, tipo: null };
   
-  // Melhor tratamento para diferentes formatos
-  if (qr.includes("-")) {
-    const lastDashIndex = qr.lastIndexOf("-");
-    return {
-      qrcode_id: qr.substring(0, lastDashIndex),
-      tipo: qr.substring(lastDashIndex + 1)
+  // Suporte para múltiplos formatos de QR Code
+  const parts = qr.split("-");
+  if (parts.length >= 2) {
+    return { 
+      qrcode_id: parts.slice(0, -1).join("-"), // Pega tudo exceto o último elemento como ID
+      tipo: parts[parts.length - 1] // Último elemento como tipo
     };
   }
-  
-  return { qrcode_id: qr, tipo: "entrada" };
+  return { qrcode_id: qr, tipo: "entrada" }; // Fallback para QR codes antigos
 }
 
 export default function AdminLeitorQR({ onLogout }) {
@@ -31,6 +30,8 @@ export default function AdminLeitorQR({ onLogout }) {
   const html5QrcodeRef = useRef(null);
   const retryCountRef = useRef(0);
   const scannerRef = useRef(null);
+
+  // Estados possíveis: INICIANDO | PRONTO | LENDO | SUCESSO | ERRO | SEM_CAMERA
 
   // Função robusta para iniciar/reiniciar a câmera
   const iniciarCamera = async () => {
@@ -52,12 +53,24 @@ export default function AdminLeitorQR({ onLogout }) {
       await scanner.start(
         { facingMode: "environment" },
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.333, // Proporção 4:3 mais comum
-          disableFlip: false
+          fps: 15, // Aumentado para melhor detecção
+          qrbox: function(viewfinderWidth, viewfinderHeight) {
+            // Área de leitura dinâmica baseada no tamanho do viewfinder
+            let minEdgePercentage = 0.7; // 70% da menor dimensão
+            let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+            let qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+            return {
+              width: qrboxSize,
+              height: qrboxSize,
+            };
+          },
+          disableFlip: false, // Permitir flip para melhor leitura
+          // Removido videoConstraints que pode não ser suportado
         },
-        handleDecodedText,
+        (decodedText) => {
+          console.log("QR Code Decodificado:", decodedText); // Log para verificar se a função é chamada
+          handleDecodedText(decodedText);
+        },
         handleScanError
       );
       
@@ -70,18 +83,11 @@ export default function AdminLeitorQR({ onLogout }) {
 
   // Tratamento avançado de erros de câmera
   const handleCameraError = (err) => {
-    // Verificar permissão negada especificamente
-    if (err.name === 'NotAllowedError') {
-      setStatus("SEM_CAMERA");
-      setErro("Permissão de câmera negada. Habilite nas configurações.");
-      return;
-    }
-    
     retryCountRef.current += 1;
     
     if (retryCountRef.current > 3) {
       setStatus("SEM_CAMERA");
-      setErro("Não foi possível acessar a câmera.");
+      setErro("Não foi possível acessar a câmera. Verifique as permissões.");
       return;
     }
 
@@ -91,20 +97,25 @@ export default function AdminLeitorQR({ onLogout }) {
     }, retryCountRef.current * 1000);
   };
 
-  // Processamento do QR Code com sanitização
+  // Processamento do QR Code com validação melhorada
   const handleDecodedText = async (decodedText) => {
-    if (status !== "PRONTO" && status !== "LENDO") return;
+    console.log("handleDecodedText chamado com:", decodedText); // Log adicional
     
+    if (status !== "PRONTO" && status !== "LENDO") {
+      console.log("Status não permite leitura:", status);
+      return;
+    }
+    
+    // Evitar múltiplas leituras simultâneas
     setStatus("LENDO");
     
-    // Sanitizar texto do QR code
-    const cleanText = decodedText.trim().replace(/[^\w\-]/g, '');
-    const { qrcode_id, tipo } = parseQR(cleanText);
+    const { qrcode_id, tipo } = parseQR(decodedText);
+    console.log("QR parseado:", { qrcode_id, tipo }); // Log do parsing
 
     if (!qrcode_id) {
       setStatus("ERRO");
       setErro("QR Code inválido: ID não encontrado");
-      setTimeout(() => iniciarCamera(), 3000);
+      setTimeout(iniciarCamera, 2000);
       return;
     }
 
@@ -115,7 +126,7 @@ export default function AdminLeitorQR({ onLogout }) {
     if (tipo && !tiposValidos.includes(tipoNormalizado)) {
       setStatus("ERRO");
       setErro(`Tipo de QR Code inválido: ${tipo}`);
-      setTimeout(() => iniciarCamera(), 3000);
+      setTimeout(iniciarCamera, 2000);
       return;
     }
 
@@ -143,22 +154,22 @@ export default function AdminLeitorQR({ onLogout }) {
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       playBeep(900, 120);
       
-      // Reinício automático
+      // Reinício automático rápido
       setTimeout(iniciarCamera, 1500);
     } catch (err) {
       console.error("Erro no registro:", err);
       setStatus("ERRO");
       setErro(err.message);
-      setTimeout(() => iniciarCamera(), 3000);
+      setTimeout(iniciarCamera, 2000);
     }
   };
 
-  // Tratamento detalhado de erros de leitura
+  // Ignorar erros normais de leitura
   const handleScanError = (err) => {
-    console.warn("Erro de leitura:", err);
+    // Adicionar log detalhado para depuração
+    console.error("Erro de leitura do QR Code:", err);
     if (!err.includes("NotFoundException") && status === "PRONTO") {
-      setErro("Falha na leitura: " + err);
-      setTimeout(() => setErro(""), 3000);
+      console.warn("Erro de leitura (não NotFoundException):");
     }
   };
 
@@ -270,6 +281,14 @@ export default function AdminLeitorQR({ onLogout }) {
               </button>
             </div>
           )}
+          
+          {/* Botão de teste para verificar se a função funciona */}
+          <button 
+            onClick={() => handleDecodedText("123456789012-entrada")}
+            style={{...styles.actionButton, marginTop: "10px", backgroundColor: "#666"}}
+          >
+            Testar QR Code (Debug)
+          </button>
         </div>
       </div>
 
@@ -335,9 +354,8 @@ const styles = {
     position: "relative",
   },
   cameraContainer: {
-    width: "100%", // Ocupa toda largura disponível
-    maxWidth: "300px",
-    height: "300px", // Altura fixa
+    width: "240px",
+    height: "240px",
     margin: "0 auto",
     borderRadius: "12px",
     overflow: "hidden",
@@ -452,3 +470,4 @@ styleSheet.innerText = `
   }
 `;
 document.head.appendChild(styleSheet);
+
