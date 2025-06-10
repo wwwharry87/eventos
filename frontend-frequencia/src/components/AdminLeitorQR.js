@@ -459,7 +459,6 @@ const styles = {
     width: "100%",
   },
 };
-
 // Adicionar CSS para animação do spinner
 const styleSheet = document.createElement("style");
 styleSheet.type = "text/css";
