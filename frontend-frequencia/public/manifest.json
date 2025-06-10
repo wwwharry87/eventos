@@ -1,7 +1,7 @@
 {
   "short_name": "Frequencia Evento",
   "name": "Frequencia com Leitor de QR Code",
-  "version": "2.0.31", 
+  "version": "2.0.32", 
   "description": "Aplicativo para registro de frequência via QR Code",
   "icons": [
     {

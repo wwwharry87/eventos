@@ -25,9 +25,9 @@ function parseQR(qr) {
 
 // Detectar se está em modo PWA standalone
 function isPWAStandalone() {
-  return window.matchMedia('(display-mode: standalone)').matches ||
+  return window.matchMedia("(display-mode: standalone)").matches ||
          window.navigator.standalone === true ||
-         document.referrer.includes('android-app://');
+         document.referrer.includes("android-app://");
 }
 
 export default function AdminLeitorQR({ onLogout }) {
@@ -54,6 +54,13 @@ export default function AdminLeitorQR({ onLogout }) {
     } else {
       iniciarCamera();
     }
+
+    // Cleanup function
+    return () => {
+      if (html5QrcodeRef.current?.isScanning) {
+        html5QrcodeRef.current.stop().catch(() => {});
+      }
+    };
   }, []);
 
   // Função robusta para iniciar/reiniciar a câmera
@@ -78,7 +85,7 @@ export default function AdminLeitorQR({ onLogout }) {
 
       // Configurações otimizadas para PWA
       const config = {
-        fps: 12, // FPS moderado para estabilidade
+        fps: 10, // FPS moderado para estabilidade
         qrbox: function(viewfinderWidth, viewfinderHeight) {
           // Área de leitura dinâmica baseada no tamanho do viewfinder
           let minEdgePercentage = 0.8; // 80% da menor dimensão
@@ -96,6 +103,8 @@ export default function AdminLeitorQR({ onLogout }) {
       // Configurações de câmera com fallback
       let cameraConfig = { facingMode: "environment" };
       
+      console.log("Preparando para iniciar scanner...");
+
       await scanner.start(
         cameraConfig,
         config,
@@ -103,8 +112,8 @@ export default function AdminLeitorQR({ onLogout }) {
         handleScanError
       );
       
-      setStatus("PRONTO");
-      console.log("Scanner iniciado com sucesso");
+      setStatus("PRONTO"); // Mover para depois do scanner.start()
+      console.log("Scanner iniciado com sucesso e status PRONTO");
     } catch (err) {
       console.error("Falha ao iniciar câmera:", err);
       handleCameraError(err);
@@ -129,10 +138,10 @@ export default function AdminLeitorQR({ onLogout }) {
 
   // Processamento do QR Code com validação melhorada
   const handleDecodedText = async (decodedText) => {
-    console.log("QR Code detectado:", decodedText);
+    console.log("QR Code detectado:", decodedText, "| Status atual:", status, "| isProcessingRef:", isProcessingRef.current);
     
-    // Prevenir múltiplas leituras simultâneas
-    if (isProcessingRef.current || (status !== "PRONTO" && status !== "LENDO")) {
+    // Prevenir múltiplas leituras simultâneas e processar apenas no estado PRONTO
+    if (isProcessingRef.current || status !== "PRONTO") { 
       console.log("Processamento já em andamento ou status inválido:", status);
       return;
     }
@@ -140,6 +149,11 @@ export default function AdminLeitorQR({ onLogout }) {
     isProcessingRef.current = true;
     setStatus("LENDO");
     
+    // Parar o scanner temporariamente para evitar múltiplas detecções
+    if (html5QrcodeRef.current?.isScanning) {
+      await html5QrcodeRef.current.stop().catch(() => {});
+    }
+
     try {
       const { qrcode_id, tipo } = parseQR(decodedText);
       console.log("QR parseado:", { qrcode_id, tipo });
