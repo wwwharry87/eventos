@@ -12,213 +12,168 @@ const COLORS = {
 function parseQR(qr) {
   if (!qr) return { qrcode_id: null, tipo: null };
   
+  // Suporte para múltiplos formatos de QR Code
   const parts = qr.split("-");
   if (parts.length >= 2) {
     return { 
-      qrcode_id: parts.slice(0, -1).join("-"),
-      tipo: parts[parts.length - 1]
+      qrcode_id: parts.slice(0, -1).join("-"), // Pega tudo exceto o último elemento como ID
+      tipo: parts[parts.length - 1] // Último elemento como tipo
     };
   }
-  return { qrcode_id: qr, tipo: "entrada" };
-}
-
-// Detecção melhorada de PWA
-function isPWA() {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    window.navigator.standalone ||
-    document.referrer.includes("android-app://")
-  );
-}
-
-// Verifica se é iOS
-function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  return { qrcode_id: qr, tipo: "entrada" }; // Fallback para QR codes antigos
 }
 
 export default function AdminLeitorQR({ onLogout }) {
   const [status, setStatus] = useState("INICIANDO");
   const [resultado, setResultado] = useState(null);
   const [erro, setErro] = useState("");
-  const [showPWAWarning, setShowPWAWarning] = useState(false);
   const html5QrcodeRef = useRef(null);
   const retryCountRef = useRef(0);
   const scannerRef = useRef(null);
-  const isProcessingRef = useRef(false);
 
-  // Inicialização com tratamento especial para iOS PWA
-  useEffect(() => {
-    const checkCameraAccess = async () => {
-      try {
-        // Verificar permissões de câmera primeiro
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        stream.getTracks().forEach(track => track.stop());
-        
-        // Se for iOS em PWA, mostrar aviso mas permitir tentar
-        if (isPWA() && isIOS()) {
-          setShowPWAWarning(true);
-          setStatus("PWA_WARNING");
-        } else {
-          iniciarCamera();
-        }
-      } catch (err) {
-        console.error("Erro de permissão de câmera:", err);
-        handleCameraError(err);
-      }
-    };
+  // Estados possíveis: INICIANDO | PRONTO | LENDO | SUCESSO | ERRO | SEM_CAMERA
 
-    checkCameraAccess();
-
-    return () => {
-      if (html5QrcodeRef.current?.isScanning) {
-        html5QrcodeRef.current.stop().catch(() => {});
-      }
-    };
-  }, []);
-
-  // Configuração otimizada para iOS PWA
-  const getCameraConfig = () => {
-    if (isIOS() && isPWA()) {
-      return {
-        facingMode: { exact: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      };
-    }
-    return { facingMode: "environment" };
-  };
-
+  // Função robusta para iniciar/reiniciar a câmera
   const iniciarCamera = async () => {
     setStatus("INICIANDO");
     setErro("");
     setResultado(null);
-    isProcessingRef.current = false;
     
     try {
+      // Limpar qualquer scanner existente
       if (html5QrcodeRef.current?.isScanning) {
         await html5QrcodeRef.current.stop();
-        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
+      // Criar novo scanner com configurações otimizadas
       const scanner = new Html5Qrcode("leitor-qr-admin");
       html5QrcodeRef.current = scanner;
       retryCountRef.current = 0;
 
-      const config = {
-        fps: isIOS() ? 5 : 10, // FPS mais baixo para iOS
-        qrbox: (width, height) => {
-          const size = Math.min(width, height) * 0.7;
-          return { width: size, height: size };
-        },
-        disableFlip: false,
-        supportedScanTypes: [Html5Qrcode.SCAN_TYPE_CAMERA],
-        formatsToSupport: [Html5Qrcode.BARCODE_FORMAT.QR_CODE]
-      };
-
-      console.log("Iniciando câmera com configuração:", config);
-      
       await scanner.start(
-        getCameraConfig(),
-        config,
-        handleDecodedText,
+        { facingMode: "environment" },
+        {
+          fps: 15, // Aumentado para melhor detecção
+          qrbox: function(viewfinderWidth, viewfinderHeight) {
+            // Área de leitura dinâmica baseada no tamanho do viewfinder
+            let minEdgePercentage = 0.7; // 70% da menor dimensão
+            let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+            let qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+            return {
+              width: qrboxSize,
+              height: qrboxSize,
+            };
+          },
+          disableFlip: false, // Permitir flip para melhor leitura
+          // Removido videoConstraints que pode não ser suportado
+        },
+        (decodedText) => {
+          console.log("QR Code Decodificado:", decodedText); // Log para verificar se a função é chamada
+          handleDecodedText(decodedText);
+        },
         handleScanError
       );
       
       setStatus("PRONTO");
-      console.log("Scanner iniciado com sucesso");
     } catch (err) {
       console.error("Falha ao iniciar câmera:", err);
       handleCameraError(err);
     }
   };
 
+  // Tratamento avançado de erros de câmera
   const handleCameraError = (err) => {
-    console.error("Erro de câmera:", err);
-    
-    if (err.name === 'NotAllowedError') {
-      setStatus("SEM_CAMERA");
-      setErro("Permissão de câmera negada. Por favor habilite nas configurações.");
-      return;
-    }
-    
     retryCountRef.current += 1;
     
-    if (retryCountRef.current > 2) {
+    if (retryCountRef.current > 3) {
       setStatus("SEM_CAMERA");
-      setErro(isPWA() && isIOS() 
-        ? "Problema com a câmera no PWA. Tente abrir no Safari."
-        : "Não foi possível acessar a câmera.");
+      setErro("Não foi possível acessar a câmera. Verifique as permissões.");
       return;
     }
 
-    setTimeout(iniciarCamera, retryCountRef.current * 2000);
+    // Tentar novamente com delay crescente
+    setTimeout(() => {
+      iniciarCamera();
+    }, retryCountRef.current * 1000);
   };
 
+  // Processamento do QR Code com validação melhorada
   const handleDecodedText = async (decodedText) => {
-    if (isProcessingRef.current || status !== "PRONTO") return;
+    console.log("handleDecodedText chamado com:", decodedText); // Log adicional
     
-    isProcessingRef.current = true;
+    if (status !== "PRONTO" && status !== "LENDO") {
+      console.log("Status não permite leitura:", status);
+      return;
+    }
+    
+    // Evitar múltiplas leituras simultâneas
     setStatus("LENDO");
     
+    const { qrcode_id, tipo } = parseQR(decodedText);
+    console.log("QR parseado:", { qrcode_id, tipo }); // Log do parsing
+
+    if (!qrcode_id) {
+      setStatus("ERRO");
+      setErro("QR Code inválido: ID não encontrado");
+      setTimeout(iniciarCamera, 2000);
+      return;
+    }
+
+    // Valores válidos para tipo
+    const tiposValidos = ["entrada", "saida", "saída"];
+    const tipoNormalizado = tipo ? tipo.toLowerCase() : "entrada";
+    
+    if (tipo && !tiposValidos.includes(tipoNormalizado)) {
+      setStatus("ERRO");
+      setErro(`Tipo de QR Code inválido: ${tipo}`);
+      setTimeout(iniciarCamera, 2000);
+      return;
+    }
+
     try {
-      // Parar scanner temporariamente
-      if (html5QrcodeRef.current?.isScanning) {
-        await html5QrcodeRef.current.pause();
-      }
-
-      const { qrcode_id, tipo } = parseQR(decodedText);
-      
-      if (!qrcode_id) {
-        throw new Error("QR Code inválido");
-      }
-
-      const tipoNormalizado = tipo ? tipo.toLowerCase() : "entrada";
-      const tiposValidos = ["entrada", "saida", "saída"];
-      
-      if (tipo && !tiposValidos.includes(tipoNormalizado)) {
-        throw new Error(`Tipo inválido: ${tipo}`);
-      }
-
       const res = await fetch("https://eventos-wi35.onrender.com/api/frequencia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qrcode_id, tipo: tipoNormalizado }),
+        body: JSON.stringify({ 
+          qrcode_id, 
+          tipo: tipoNormalizado 
+        }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.mensagem || `Erro ${res.status}`);
-      }
-
       const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.mensagem || `Erro ${res.status} ao registrar`);
+      }
+      
+      // Feedback de sucesso
       setResultado({ ...data, tipo: tipoNormalizado });
       setStatus("SUCESSO");
       
+      // Feedback tátil e sonoro
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       playBeep(900, 120);
       
-      setTimeout(() => {
-        isProcessingRef.current = false;
-        iniciarCamera();
-      }, 2000);
+      // Reinício automático rápido
+      setTimeout(iniciarCamera, 1500);
     } catch (err) {
-      console.error("Erro:", err);
+      console.error("Erro no registro:", err);
       setStatus("ERRO");
       setErro(err.message);
-      
-      setTimeout(() => {
-        isProcessingRef.current = false;
-        iniciarCamera();
-      }, 2500);
+      setTimeout(iniciarCamera, 2000);
     }
   };
 
+  // Ignorar erros normais de leitura
   const handleScanError = (err) => {
-    if (!err.includes("NotFoundException")) {
-      console.warn("Erro de leitura:", err);
+    // Adicionar log detalhado para depuração
+    console.error("Erro de leitura do QR Code:", err);
+    if (!err.includes("NotFoundException") && status === "PRONTO") {
+      console.warn("Erro de leitura (não NotFoundException):");
     }
   };
 
+  // Beep otimizado para iOS
   const playBeep = (freq = 700, duration = 120) => {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -233,8 +188,21 @@ export default function AdminLeitorQR({ onLogout }) {
     }
   };
 
+  // Gerenciamento de ciclo de vida
+  useEffect(() => {
+    iniciarCamera();
+    
+    return () => {
+      if (html5QrcodeRef.current?.isScanning) {
+        html5QrcodeRef.current.stop().catch(() => {});
+      }
+    };
+  }, []);
+
+  // Renderização otimizada
   return (
     <div style={styles.container}>
+      {/* Cabeçalho */}
       <header style={styles.header}>
         Leitor de QR Code — Admin
         <button onClick={onLogout} style={styles.logoutButton} aria-label="Sair">
@@ -242,35 +210,18 @@ export default function AdminLeitorQR({ onLogout }) {
         </button>
       </header>
 
+      {/* Área principal */}
       <div style={styles.scannerArea}>
-        {showPWAWarning && (
-          <div style={styles.warningBox}>
-            <h3 style={styles.warningTitle}>⚠️ Aviso - PWA no iOS</h3>
-            <p style={styles.warningText}>
-              No iOS, a câmera pode ter melhor desempenho quando aberta no Safari.
-              Para melhor experiência:
-            </p>
-            <ol style={styles.warningList}>
-              <li>Abra no Safari</li>
-              <li>Conceda permissão de câmera</li>
-              <li>Adicione à tela inicial novamente</li>
-            </ol>
-            <button 
-              onClick={() => {
-                setShowPWAWarning(false);
-                iniciarCamera();
-              }}
-              style={styles.actionButton}
-            >
-              Tentar no PWA
-            </button>
-          </div>
-        )}
-
+        {/* Container da câmera */}
         <div style={styles.cameraContainer}>
-          <div id="leitor-qr-admin" ref={scannerRef} style={styles.cameraView} />
+          <div 
+            id="leitor-qr-admin"
+            ref={scannerRef}
+            style={styles.cameraView}
+          />
           
-          {status !== "PRONTO" && status !== "PWA_WARNING" && (
+          {/* Overlay de status */}
+          {status !== "PRONTO" && (
             <div style={styles.overlay}>
               {status === "INICIANDO" && (
                 <div style={styles.statusMessage}>
@@ -278,16 +229,21 @@ export default function AdminLeitorQR({ onLogout }) {
                   <p>Iniciando câmera...</p>
                 </div>
               )}
+              
               {status === "LENDO" && (
                 <div style={styles.statusMessage}>
                   <div style={styles.spinner} />
                   <p>Processando QR Code...</p>
                 </div>
               )}
+              
               {status === "SEM_CAMERA" && (
                 <div style={styles.errorMessage}>
-                  <p>❌ {erro || "Câmera não acessível"}</p>
-                  <button onClick={iniciarCamera} style={styles.actionButton}>
+                  <p>❌ Câmera não acessível</p>
+                  <button 
+                    onClick={iniciarCamera}
+                    style={styles.actionButton}
+                  >
                     Tentar Novamente
                   </button>
                 </div>
@@ -296,6 +252,7 @@ export default function AdminLeitorQR({ onLogout }) {
           )}
         </div>
 
+        {/* Mensagens de status */}
         <div style={styles.statusContainer}>
           {status === "PRONTO" && (
             <p style={styles.readyText}>Aponte para o QR Code do participante</p>
@@ -316,14 +273,26 @@ export default function AdminLeitorQR({ onLogout }) {
           {status === "ERRO" && (
             <div style={styles.errorBox}>
               <p>{erro || "Erro desconhecido"}</p>
-              <button onClick={iniciarCamera} style={styles.actionButton}>
+              <button 
+                onClick={iniciarCamera}
+                style={styles.actionButton}
+              >
                 Tentar Novamente
               </button>
             </div>
           )}
+          
+          {/* Botão de teste para verificar se a função funciona */}
+          <button 
+            onClick={() => handleDecodedText("123456789012-entrada")}
+            style={{...styles.actionButton, marginTop: "10px", backgroundColor: "#666"}}
+          >
+            Testar QR Code (Debug)
+          </button>
         </div>
       </div>
 
+      {/* Rodapé */}
       <footer style={styles.footer}>
         © {new Date().getFullYear()} Prefeitura de Marabá — Educacenso
       </footer>
@@ -331,6 +300,7 @@ export default function AdminLeitorQR({ onLogout }) {
   );
 }
 
+// Estilos otimizados
 const styles = {
   container: {
     minHeight: "100dvh",
@@ -383,37 +353,9 @@ const styles = {
     padding: "20px",
     position: "relative",
   },
-  warningBox: {
-    background: "#fff3cd",
-    border: "1px solid #ffeaa7",
-    borderRadius: "12px",
-    padding: "16px",
-    marginBottom: "20px",
-    textAlign: "center",
-    width: "100%",
-  },
-  warningTitle: {
-    color: "#856404",
-    margin: "0 0 8px 0",
-    fontSize: "16px",
-    fontWeight: "bold",
-  },
-  warningText: {
-    color: "#856404",
-    margin: "0 0 12px 0",
-    fontSize: "14px",
-    lineHeight: "1.4",
-  },
-  warningList: {
-    textAlign: "left",
-    paddingLeft: "20px",
-    margin: "12px 0",
-    fontSize: "14px",
-    color: "#856404",
-  },
   cameraContainer: {
-    width: "280px",
-    height: "280px",
+    width: "240px",
+    height: "240px",
     margin: "0 auto",
     borderRadius: "12px",
     overflow: "hidden",
@@ -517,7 +459,6 @@ const styles = {
     width: "100%",
   },
 };
-
 // Adicionar CSS para animação do spinner
 const styleSheet = document.createElement("style");
 styleSheet.type = "text/css";
@@ -528,3 +469,4 @@ styleSheet.innerText = `
   }
 `;
 document.head.appendChild(styleSheet);
+
